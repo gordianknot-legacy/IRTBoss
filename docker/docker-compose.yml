@@ -1,0 +1,69 @@
+# IRTBoss Docker Compose Configuration
+# For local development and testing
+
+version: '3.8'
+
+services:
+  # Backend API
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    volumes:
+      - ../backend/app:/app/app:ro  # For development hot-reload
+      - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for task queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Worker for background tasks
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: rq worker --url redis://redis:6379/0 irtboss
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ../backend/app:/app/app:ro
+      - uploads:/app/uploads
+
+  # Frontend (optional, for full-stack development)
+  # frontend:
+  #   build:
+  #     context: ../frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - api
+  #   environment:
+  #     - REACT_APP_API_URL=http://localhost:8000
+
+volumes:
+  redis-data:
+  uploads:

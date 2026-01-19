@@ -1,0 +1,32 @@
+# IRTBoss Backend Requirements
+# Python 3.10+
+
+# Web framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# Data handling
+pandas>=2.1.0
+numpy>=1.24.0
+
+# Validation
+pydantic>=2.5.0
+
+# Task queue (choose one based on deployment)
+rq>=1.16.0
+redis>=5.0.0
+
+# For PDF report generation
+# weasyprint>=60.0
+# jinja2>=3.1.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+httpx>=0.26.0
+
+# Development
+black>=24.0.0
+ruff>=0.1.0
+mypy>=1.8.0
