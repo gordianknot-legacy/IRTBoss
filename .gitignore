@@ -95,3 +95,6 @@ uploads/
 *.temp
 .temp/
 tmp/
+
+# venv
+backend/.venv/
