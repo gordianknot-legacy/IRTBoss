@@ -12,14 +12,20 @@ numpy>=1.24.0
 
 # Validation
 pydantic>=2.5.0
+pydantic-settings>=2.1.0
 
-# Task queue (choose one based on deployment)
+# Database
+sqlalchemy>=2.0.25
+asyncpg>=0.29.0
+alembic>=1.13.0
+
+# Task queue
 rq>=1.16.0
 redis>=5.0.0
 
 # For PDF report generation
-# weasyprint>=60.0
-# jinja2>=3.1.0
+weasyprint>=60.0
+jinja2>=3.1.0
 
 # Testing
 pytest>=7.4.0

@@ -25,18 +25,24 @@ async def lifespan(app: FastAPI):
     """
     Lifespan context manager for startup and shutdown events.
     """
+    from .db.database import init_db, close_db
+
     # Startup
     logger.info("Starting IRTBoss API server...")
 
-    # TODO: Initialize database connection
-    # TODO: Initialize Redis/task queue connection
+    # Initialize database
+    try:
+        await init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        # Continue anyway - database might not be available in dev
 
     yield
 
     # Shutdown
     logger.info("Shutting down IRTBoss API server...")
-    # TODO: Close database connections
-    # TODO: Close task queue connections
+    await close_db()
 
 
 # Create FastAPI application

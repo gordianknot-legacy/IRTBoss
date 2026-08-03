@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
-
-type ReportFormat = 'pdf' | 'html' | 'json'
+import { useParams, useNavigate } from 'react-router-dom'
+import { generateReport, ApiError, type ReportFormat, type ReportResponse } from '../api'
 
 export default function Export() {
-  const { projectId } = useParams()
+  const { projectId } = useParams<{ projectId: string }>()
+  const navigate = useNavigate()
   const [selectedFormat, setSelectedFormat] = useState<ReportFormat>('pdf')
   const [includeAppendix, setIncludeAppendix] = useState(true)
   const [includeItemDetails, setIncludeItemDetails] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [generatedReport, setGeneratedReport] = useState<ReportResponse | null>(null)
 
   const formats = [
     {
@@ -29,13 +31,38 @@ export default function Export() {
   ]
 
   const handleGenerate = async () => {
+    if (!projectId) return
+
     setGenerating(true)
+    setError(null)
+    setGeneratedReport(null)
+
     try {
-      // Would call API here
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      alert('Report generation is not yet implemented')
+      const response = await generateReport({
+        project_id: projectId,
+        format: selectedFormat,
+        include_technical_appendix: includeAppendix,
+        include_item_details: includeItemDetails,
+      })
+      setGeneratedReport(response)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 404) {
+          setError('No results available. Please fit models first.')
+        } else {
+          setError(err.detail || err.message)
+        }
+      } else {
+        setError('Failed to generate report')
+      }
     } finally {
       setGenerating(false)
+    }
+  }
+
+  const handleDownload = () => {
+    if (generatedReport?.download_url) {
+      window.open(generatedReport.download_url, '_blank')
     }
   }
 
@@ -164,14 +191,74 @@ export default function Export() {
         </ul>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      {/* Success Message */}
+      {generatedReport && (
+        <div className="card mb-6 border-l-4 border-l-green-500">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg
+                className="h-6 w-6 text-green-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <div className="ml-4 flex-1">
+              <h3 className="text-lg font-medium text-gray-900">
+                Report Generated Successfully
+              </h3>
+              <p className="mt-1 text-sm text-gray-600">
+                Your {generatedReport.format.toUpperCase()} report is ready for download.
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                Generated at: {new Date(generatedReport.generated_at).toLocaleString()}
+              </p>
+              <button
+                onClick={handleDownload}
+                className="btn btn-primary mt-4"
+              >
+                Download Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Generate Button */}
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        <button
+          onClick={() => navigate(`/projects/${projectId}/diagnostics`)}
+          className="btn btn-secondary"
+        >
+          Back to Diagnostics
+        </button>
         <button
           onClick={handleGenerate}
           disabled={generating}
           className="btn btn-primary"
         >
-          {generating ? 'Generating...' : `Generate ${selectedFormat.toUpperCase()} Report`}
+          {generating ? (
+            <span className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              Generating...
+            </span>
+          ) : (
+            `Generate ${selectedFormat.toUpperCase()} Report`
+          )}
         </button>
       </div>
     </div>
