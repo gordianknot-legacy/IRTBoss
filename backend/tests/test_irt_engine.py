@@ -20,7 +20,6 @@ from app.irt.em import MISSING, EMOptions, ResponseMatrix, fit
 from app.irt.families import ModelKey, get_family
 from app.irt.simulate import simulate, spread_parameters
 
-
 # (model, n_persons, n_items, n_categories, max |bias|, max RMSE)
 DICHOTOMOUS_CASES = [
     (ModelKey.RASCH, 1500, 20, 2, 0.10, 0.15),

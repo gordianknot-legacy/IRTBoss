@@ -89,7 +89,7 @@ class Quadrature:
     weights: np.ndarray
 
     @classmethod
-    def normal(cls, n_points: int = 61, bound: float = 6.0) -> "Quadrature":
+    def normal(cls, n_points: int = 61, bound: float = 6.0) -> Quadrature:
         """Equally spaced grid with standard normal weights.
 
         A rectangular grid with normal weights is used rather than true

@@ -11,18 +11,16 @@ implement native Python IRT estimation using PyTorch.
 
 import json
 import logging
-import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 
 from ..core.model_selection import (
-    FittedModel,
     FitStatistics,
+    FittedModel,
     IRTModel,
     ItemParameters,
 )
@@ -172,7 +170,7 @@ class MirtWrapper(IRTModelFitter):
 
     def __init__(
         self,
-        r_path: Optional[str] = None,
+        r_path: str | None = None,
         timeout_seconds: int = 300,
     ):
         """
@@ -184,7 +182,7 @@ class MirtWrapper(IRTModelFitter):
         """
         self.r_path = r_path or "Rscript"
         self.timeout = timeout_seconds
-        self._version: Optional[str] = None
+        self._version: str | None = None
 
     def is_available(self) -> bool:
         """Check if R and mirt are available."""
@@ -213,7 +211,7 @@ class MirtWrapper(IRTModelFitter):
         self,
         data: pd.DataFrame,
         model_type: IRTModel,
-        options: Optional[FittingOptions] = None,
+        options: FittingOptions | None = None,
     ) -> FittingResult:
         """
         Fit an IRT model using R mirt.
@@ -362,7 +360,7 @@ class MirtWrapper(IRTModelFitter):
     def fit_all(
         self,
         data: pd.DataFrame,
-        options: Optional[FittingOptions] = None,
+        options: FittingOptions | None = None,
         include_3pl: bool = False,
     ) -> dict[IRTModel, FittingResult]:
         """
@@ -470,7 +468,7 @@ class DummyFitter(IRTModelFitter):
         self,
         data: pd.DataFrame,
         model_type: IRTModel,
-        options: Optional[FittingOptions] = None,
+        options: FittingOptions | None = None,
     ) -> FittingResult:
         """Generate dummy fitted model."""
         logger.warning("Using DummyFitter - results are not real!")
@@ -534,7 +532,7 @@ class DummyFitter(IRTModelFitter):
     def fit_all(
         self,
         data: pd.DataFrame,
-        options: Optional[FittingOptions] = None,
+        options: FittingOptions | None = None,
         include_3pl: bool = False,
     ) -> dict[IRTModel, FittingResult]:
         """Fit all models using dummy fitter."""

@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    # Weekly, Monday 04:00 UTC. The mirt comparison is slow and its result only
+    # changes when the estimator does, so it does not belong on every push.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Tier 1: everything that needs only Python. Runs on every push, and is the
+  # gate for merging. Parameter recovery lives here, so a broken estimator
+  # cannot reach the default branch.
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy scipy pandas pytest pytest-xdist ruff
+
+      - name: Lint
+        # Scoped to the v2 packages. The v1 modules still in the tree - the R
+        # subprocess wrapper and the routes that depend on it - are scheduled
+        # for removal in the cutover, and linting code that is about to be
+        # deleted would only produce noise that gets suppressed rather than
+        # fixed. Widen this to `app tests` once the cutover lands.
+        run: ruff check app/irt app/psychometrics tests/validation tests/test_irt_engine.py tests/test_psychometrics_*.py
+
+      - name: Run tests
+        # Scoped to the v2 suites for the same reason as the lint step: the v1
+        # test files exercise modules that are being removed.
+        run: pytest tests/test_irt_engine.py tests/test_psychometrics_*.py -q -n auto
+
+  # Tier 2: agreement with an independent implementation of the same models.
+  # Scheduled rather than per-push because installing R and compiling mirt
+  # dominates the runtime.
+  mirt-agreement:
+    name: Agreement with R mirt
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy scipy pandas pytest
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "release"
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::mirt
+            any::jsonlite
+          working-directory: backend
+
+      - name: Generate the mirt reference fits
+        run: Rscript tests/validation/mirt_reference.R
+
+      - name: Compare against our estimator
+        run: pytest tests/validation -q
+
+      - name: Upload the reference output
+        # Kept whatever the outcome: when this job fails, the reference fits are
+        # the evidence needed to work out which implementation is wrong.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mirt-reference
+          path: backend/tests/validation/fixtures/*.mirt.json
+          if-no-files-found: warn

@@ -14,7 +14,7 @@ import itertools
 import numpy as np
 import pytest
 
-from app.irt.em import MISSING, fit
+from app.irt.em import fit
 from app.irt.families import ItemParameters, ModelKey
 from app.irt.simulate import TrueParameters, simulate, spread_parameters
 from app.psychometrics.information import category_probabilities

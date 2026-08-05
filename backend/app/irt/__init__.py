@@ -7,11 +7,11 @@ Currently supports R mirt via subprocess; designed to be
 replaceable with native Python implementation in the future.
 """
 
-from .models import IRTModelFitter, FittingResult
 from .mirt_wrapper import MirtWrapper
+from .models import FittingResult, IRTModelFitter
 
 __all__ = [
-    "IRTModelFitter",
     "FittingResult",
+    "IRTModelFitter",
     "MirtWrapper",
 ]

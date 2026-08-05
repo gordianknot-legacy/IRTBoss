@@ -10,16 +10,14 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Protocol
+from typing import Protocol
 
 import numpy as np
 import pandas as pd
 
 from ..core.model_selection import (
     FittedModel,
-    FitStatistics,
     IRTModel,
-    ItemParameters,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,8 +41,8 @@ class FittingResult:
     """
     model_type: IRTModel
     status: FittingStatus
-    model: Optional[FittedModel] = None
-    error_message: Optional[str] = None
+    model: FittedModel | None = None
+    error_message: str | None = None
     warnings: list[str] = field(default_factory=list)
     fitting_time_seconds: float = 0.0
     n_iterations: int = 0
@@ -62,7 +60,7 @@ class FittingOptions:
     convergence_threshold: float = 0.001
     estimation_method: str = "EM"  # EM, MHRM, QMCEM
     quadrature_points: int = 61
-    random_seed: Optional[int] = None
+    random_seed: int | None = None
 
 
 class IRTModelFitter(ABC):
@@ -92,7 +90,7 @@ class IRTModelFitter(ABC):
         self,
         data: pd.DataFrame,
         model_type: IRTModel,
-        options: Optional[FittingOptions] = None,
+        options: FittingOptions | None = None,
     ) -> FittingResult:
         """
         Fit an IRT model to response data.
@@ -105,13 +103,12 @@ class IRTModelFitter(ABC):
         Returns:
             FittingResult with model and status
         """
-        pass
 
     @abstractmethod
     def fit_all(
         self,
         data: pd.DataFrame,
-        options: Optional[FittingOptions] = None,
+        options: FittingOptions | None = None,
         include_3pl: bool = False,
     ) -> dict[IRTModel, FittingResult]:
         """
@@ -125,7 +122,6 @@ class IRTModelFitter(ABC):
         Returns:
             Dictionary mapping model type to fitting result
         """
-        pass
 
     @abstractmethod
     def estimate_abilities(
@@ -145,7 +141,6 @@ class IRTModelFitter(ABC):
         Returns:
             Array of ability estimates
         """
-        pass
 
     def is_available(self) -> bool:
         """
@@ -173,7 +168,7 @@ class CallbackProtocol(Protocol):
         self,
         model_type: str,
         progress: float,
-        message: Optional[str] = None,
+        message: str | None = None,
     ) -> None:
         """
         Called to report fitting progress.
