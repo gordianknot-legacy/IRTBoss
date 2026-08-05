@@ -1,17 +1,40 @@
-# IRT Modeling Layer
 """
-IRT model fitting and estimation.
+Item response theory estimation.
 
-This package provides the interface to IRT modeling engines.
-Currently supports R mirt via subprocess; designed to be
-replaceable with native Python implementation in the future.
+A native marginal-maximum-likelihood estimator. Nothing here shells out to R:
+the previous implementation did, and silently substituted fabricated parameters
+whenever R was unavailable, which is the defect this package was written to
+remove.
 """
 
-from .mirt_wrapper import MirtWrapper
-from .models import FittingResult, IRTModelFitter
+from .em import (
+    MISSING,
+    EMOptions,
+    FitResult,
+    Quadrature,
+    ResponseMatrix,
+    fit,
+)
+from .families import (
+    DICHOTOMOUS_MODELS,
+    POLYTOMOUS_MODELS,
+    ItemParameters,
+    ModelKey,
+    SlopeMode,
+    get_family,
+)
 
 __all__ = [
-    "FittingResult",
-    "IRTModelFitter",
-    "MirtWrapper",
+    "DICHOTOMOUS_MODELS",
+    "MISSING",
+    "POLYTOMOUS_MODELS",
+    "EMOptions",
+    "FitResult",
+    "ItemParameters",
+    "ModelKey",
+    "Quadrature",
+    "ResponseMatrix",
+    "SlopeMode",
+    "fit",
+    "get_family",
 ]
