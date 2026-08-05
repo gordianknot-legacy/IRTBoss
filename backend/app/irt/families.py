@@ -146,6 +146,16 @@ class ItemFamily(ABC):
     def initial(self, observed: np.ndarray, n_cat: int) -> np.ndarray:
         """Starting values from the item's observed responses (missing removed)."""
 
+    @abstractmethod
+    def from_natural(self, params: ItemParameters) -> np.ndarray:
+        """Inverse of :meth:`to_natural`.
+
+        Diagnostics receive fitted parameters on the natural scale but need to
+        evaluate response probabilities, which are defined on the unconstrained
+        scale. Without this round trip every diagnostic would have to re-derive
+        each family's encoding for itself.
+        """
+
     def log_prior(self, u: np.ndarray, n_cat: int) -> float:
         """Log prior on the unconstrained vector. Zero unless a family needs one."""
         return 0.0
@@ -202,6 +212,12 @@ class _Dichotomous(ItemFamily):
         u = [0.0, b]
         if self.has_guessing:
             u.append(_logit(0.2))
+        return np.asarray(u, dtype=float)
+
+    def from_natural(self, params: ItemParameters) -> np.ndarray:
+        u = [float(np.log(params.discrimination)), float(params.difficulty)]
+        if self.has_guessing:
+            u.append(float(_logit(params.guessing or 0.0)))
         return np.asarray(u, dtype=float)
 
 
@@ -337,6 +353,13 @@ class GradedResponseFamily(ItemFamily):
             u[1 + k] = np.log(gap)
         return u
 
+    def from_natural(self, params: ItemParameters) -> np.ndarray:
+        b = np.asarray(params.thresholds, dtype=float)
+        u = [float(np.log(params.discrimination)), float(b[0])]
+        for k in range(1, b.size):
+            u.append(float(np.log(max(b[k] - b[k - 1], 1e-9))))
+        return np.asarray(u, dtype=float)
+
 
 class _PartialCredit(ItemFamily):
     """Shared machinery for the PCM and GPCM.
@@ -390,6 +413,12 @@ class _PartialCredit(ItemFamily):
             prop = float(np.clip((observed >= k).sum() / max(n, 1), 0.02, 0.98))
             u[k] = -_logit(prop) / 1.7
         return u
+
+    def from_natural(self, params: ItemParameters) -> np.ndarray:
+        steps = [float(s) for s in params.thresholds]
+        return np.asarray(
+            [float(np.log(params.discrimination)), *steps], dtype=float
+        )
 
 
 class PartialCreditFamily(_PartialCredit):
