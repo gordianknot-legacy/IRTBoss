@@ -461,7 +461,7 @@ def velicer_map(matrix: np.ndarray) -> MapResult:
     fourth: list[float] = []
     notes: list[str] = []
 
-    for m in range(0, p):
+    for m in range(p):
         if m == 0:
             partial = matrix
         else:
@@ -511,6 +511,37 @@ def velicer_map(matrix: np.ndarray) -> MapResult:
 # --------------------------------------------------------------------------- #
 
 
+def _varimax(loadings: np.ndarray, n_iter: int = 200, tol: float = 1e-8) -> np.ndarray:
+    """Kaiser varimax rotation of a loading matrix.
+
+    Unrotated principal components are ordered by variance, not by content: the
+    second component of a two-block test is a *contrast* that loads positively on
+    one block and negatively on the other, so items cannot be assigned to blocks
+    by reading it directly. Rotating to simple structure recovers one column per
+    block. The rotation is orthogonal, so communalities are unchanged; only the
+    item-to-group assignment depends on it.
+    """
+    p, k = loadings.shape
+    if k < 2:
+        return loadings.copy()
+
+    rotation = np.eye(k)
+    previous = 0.0
+    for _ in range(n_iter):
+        rotated = loadings @ rotation
+        gradient = loadings.T @ (
+            rotated**3
+            - rotated @ np.diag(np.sum(rotated**2, axis=0)) / p
+        )
+        u, s, vt = np.linalg.svd(gradient)
+        rotation = u @ vt
+        current = float(np.sum(s))
+        if previous and current - previous < tol * current:
+            break
+        previous = current
+    return loadings @ rotation
+
+
 @dataclass(frozen=True)
 class BifactorApproximation:
     """ECV, PUC and omega-hierarchical from an approximate bifactor pattern."""
@@ -540,7 +571,7 @@ def bifactor_approximation(
     1. the general factor taken as the first principal component of the
        polychoric matrix;
     2. group factors taken as the leading principal components of the residual
-       matrix ``R - g g'``;
+       matrix ``R - g g'``, rotated to simple structure by varimax;
     3. each item assigned to the single group factor it loads on most strongly,
        with its other group loadings discarded.
 
@@ -580,19 +611,39 @@ def bifactor_approximation(
     assignment = np.full(p, -1, dtype=int)
     n_group = max(int(n_group_factors), 0)
 
-    if n_group >= 1:
+    if n_group >= 2:
+        # Items are clustered on the varimax-rotated components of R itself, not
+        # of the residual. The residual of an F-factor test after one general
+        # factor spans only F-1 dimensions, so rotating *it* cannot produce F
+        # separable columns; rotating the full common space can.
+        rotated = _varimax(vectors[:, :n_group] * np.sqrt(values[:n_group]))
+        assignment = np.argmax(np.abs(rotated), axis=1)
+
         residual = matrix - np.outer(general, general)
-        r_values, r_vectors = np.linalg.eigh(residual)
-        r_order = np.argsort(r_values)[::-1]
-        r_values = np.clip(r_values[r_order][:n_group], 0.0, None)
-        r_vectors = r_vectors[:, r_order][:, :n_group]
-        candidate = r_vectors * np.sqrt(r_values)
-        assignment = np.argmax(np.abs(candidate), axis=1)
-        group = candidate[np.arange(p), assignment]
-        if (r_values <= 1e-8).any():
+        singleton = 0
+        for f in range(n_group):
+            members = np.flatnonzero(assignment == f)
+            if members.size < 2:
+                # One item cannot define a group factor; its residual variance
+                # stays uniqueness rather than being promoted to a factor.
+                singleton += int(members.size)
+                continue
+            block = residual[np.ix_(members, members)].copy()
+            # Principal-axis style: the residual diagonal still holds each item's
+            # uniqueness, and leaving it in would inflate the group loadings.
+            off_block = np.abs(block - np.diag(np.diag(block)))
+            np.fill_diagonal(block, off_block.max(axis=1))
+            b_values, b_vectors = np.linalg.eigh(block)
+            lead = int(np.argmax(b_values))
+            lam = b_vectors[:, lead] * np.sqrt(max(float(b_values[lead]), 0.0))
+            if lam.sum() < 0:
+                lam = -lam
+            group[members] = lam
+
+        if singleton:
             notes.append(
-                f"{int((r_values <= 1e-8).sum())} requested group factor(s) had "
-                "no residual variance left to explain and contribute nothing."
+                f"{singleton} item(s) were the only member of their cluster and "
+                "contribute no group-factor variance, which raises ECV."
             )
     else:
         notes.append(
@@ -607,7 +658,7 @@ def bifactor_approximation(
     ecv = float(general_variance / common) if common > _FLOOR else float("nan")
 
     total_pairs = p * (p - 1) / 2.0
-    if n_group >= 1 and total_pairs > 0:
+    if n_group >= 2 and total_pairs > 0:
         sizes = np.bincount(assignment, minlength=n_group).astype(float)
         within = float(np.sum(sizes * (sizes - 1) / 2.0))
         puc = float(1.0 - within / total_pairs)
@@ -616,7 +667,7 @@ def bifactor_approximation(
 
     uniqueness = np.clip(1.0 - general**2 - group**2, 0.0, None)
     general_sq = float(np.sum(general) ** 2)
-    if n_group >= 1:
+    if n_group >= 2:
         group_sq = float(
             np.sum([np.sum(group[assignment == f]) ** 2 for f in range(n_group)])
         )
@@ -630,7 +681,7 @@ def bifactor_approximation(
     else:
         omega_h = omega_total = float("nan")
 
-    if puc > 0.90 and n_group >= 1:
+    if puc > 0.80 and n_group >= 2:
         notes.append(
             f"PUC is {puc:.2f}. Above roughly 0.80 the general factor in any "
             "bifactor-style solution is close to the first factor of a "
@@ -722,10 +773,14 @@ def unidimensionality(
     )
     map_test = velicer_map(poly.matrix)
 
-    # The bifactor approximation needs a number of group factors. Parallel
-    # analysis is used for it rather than MAP because MAP's known
-    # under-extraction would systematically flatter the general factor.
-    n_group = max(parallel.n_factors_retained - 1, 0)
+    # A Schmid-Leiman transformation of F correlated first-order factors under
+    # one second-order factor yields a general factor plus F group factors, so
+    # the group count is F rather than F - 1. One retained factor means there is
+    # no group structure to model, and G = 1 is not an identified bifactor
+    # pattern, so both collapse to zero group factors. Parallel analysis supplies
+    # F rather than MAP, whose known under-extraction would flatter the general
+    # factor.
+    n_group = parallel.n_factors_retained if parallel.n_factors_retained >= 2 else 0
     bifactor = bifactor_approximation(poly.matrix, n_group)
 
     notes = list(poly.notes)
@@ -916,6 +971,19 @@ def local_independence(
         "stimulus are expected to be locally dependent; the question is whether "
         "the dependence was intended and modelled, not whether it exists."
     )
+
+    positive = [p for p in pairs if p.flagged and p.q3_star > 0]
+    if positive and len(pairs) and len([p for p in pairs if p.flagged]) > 1:
+        strongest = max(positive, key=lambda p: p.q3_star)
+        if strongest.q3_star > 0.4:
+            notes.append(
+                f"The dependence between {strongest.item_a} and "
+                f"{strongest.item_b} (Q3* = {strongest.q3_star:.2f}) is strong "
+                "enough to distort the theta estimates the residuals are taken "
+                "from, which drags other pairs' Q3* downwards and can flag them "
+                "negatively. Resolve the strongest pair first and recompute "
+                "before interpreting the rest."
+            )
 
     return LocalIndependenceReport(
         pairs=pairs,
