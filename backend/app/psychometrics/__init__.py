@@ -11,6 +11,15 @@ Every statistic here reports its own uncertainty or its own limits. Nothing
 returns a bare number with an implied verdict attached.
 """
 
+from .comparison import (
+    ComparisonDossier,
+    Disagreement,
+    FoldResult,
+    LikelihoodRatioTest,
+    ModelEvidence,
+    compare,
+)
+from .globalfit import GlobalFitResult, global_fit
 from .information import (
     category_probabilities,
     item_information,
@@ -23,13 +32,21 @@ from .reliability import PrecisionBand, ReliabilityReport, reliability
 from .scoring import PersonScores, ScoreMethod, score
 
 __all__ = [
+    "ComparisonDossier",
+    "Disagreement",
+    "FoldResult",
+    "GlobalFitResult",
     "ItemFitReport",
     "ItemFitResult",
+    "LikelihoodRatioTest",
+    "ModelEvidence",
     "PersonScores",
     "PrecisionBand",
     "ReliabilityReport",
     "ScoreMethod",
     "category_probabilities",
+    "compare",
+    "global_fit",
     "item_fit",
     "item_information",
     "posterior_standard_error",

@@ -74,7 +74,7 @@ import numpy as np
 from scipy import optimize, stats
 
 from app.irt.em import MISSING, ResponseMatrix, _ParameterIndex
-from app.irt.families import ItemParameters, ModelKey, SlopeMode, get_family
+from app.irt.families import ItemParameters, SlopeMode, get_family
 
 _FLOOR = 1e-12
 
@@ -190,12 +190,12 @@ def global_fit(
     templates = [family.from_natural(p) for p in items]
     vartheta = _pack(templates, index, latent_sd)
 
-    def implied(vec: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        cum, weights = _model_state(family, vec, templates, index, n_cat, nodes)
-        return _moment_values(cum, weights, moments), weights
+    def implied(vec: np.ndarray) -> np.ndarray:
+        state, latent = _model_state(family, vec, templates, index, n_cat, nodes)
+        return _moment_values(state, latent, moments)
 
-    pi, weights = implied(vartheta)
-    cum, _ = _model_state(family, vartheta, templates, index, n_cat, nodes)
+    cum, weights = _model_state(family, vartheta, templates, index, n_cat, nodes)
+    pi = _moment_values(cum, weights, moments)
 
     observed = _observed_moments(values, moments)
     residual = observed - pi
@@ -206,7 +206,7 @@ def global_fit(
         backward = vartheta.copy()
         forward[t] += _H
         backward[t] -= _H
-        delta[:, t] = (implied(forward)[0] - implied(backward)[0]) / (2.0 * _H)
+        delta[:, t] = (implied(forward) - implied(backward)) / (2.0 * _H)
 
     xi = _moment_covariance(cum, weights, moments, pi)
 
@@ -436,9 +436,12 @@ def _rmsea2(
     scale = float(df) * float(n - 1)
     point = np.sqrt(max(statistic - df, 0.0) / scale)
 
+    # Steiger's inversion: the lower bound is the noncentrality that would make
+    # the observed statistic extreme in the upper tail, the upper bound the one
+    # that would make it extreme in the lower tail.
     alpha = 1.0 - confidence
-    lower_lambda = _noncentrality(statistic, df, 1.0 - alpha / 2.0)
-    upper_lambda = _noncentrality(statistic, df, alpha / 2.0)
+    lower_lambda = _noncentrality(statistic, df, alpha / 2.0)
+    upper_lambda = _noncentrality(statistic, df, 1.0 - alpha / 2.0)
     return (
         float(point),
         float(np.sqrt(lower_lambda / scale)),
@@ -487,8 +490,6 @@ def _srmsr(
     if n_items < 2:
         return None
 
-    scores = [np.arange(int(m), dtype=float) for m in n_cat]
-
     # Conditional first and second moments of the item score at each node,
     # rebuilt from the cumulative form: E[X | theta] = sum_c P(X >= c | theta).
     mean_by_node = []
@@ -527,7 +528,6 @@ def _srmsr(
 
     if pairs == 0:
         return None
-    del scores
     return float(np.sqrt(total / pairs))
 
 
