@@ -33,22 +33,21 @@ jobs:
           cache: pip
 
       - name: Install dependencies
+        # From requirements.txt rather than a hand-listed set: the suite now
+        # covers the API, auth, persistence and queue layers, and a drifting
+        # inline list would silently stop exercising whichever one it forgot.
         run: |
           python -m pip install --upgrade pip
-          pip install numpy scipy pandas pytest pytest-xdist ruff
+          pip install -r requirements.txt pytest-xdist
 
       - name: Lint
-        # Scoped to the v2 packages. The v1 modules still in the tree - the R
-        # subprocess wrapper and the routes that depend on it - are scheduled
-        # for removal in the cutover, and linting code that is about to be
-        # deleted would only produce noise that gets suppressed rather than
-        # fixed. Widen this to `app tests` once the cutover lands.
-        run: ruff check app/irt app/psychometrics tests/validation tests/test_irt_engine.py tests/test_psychometrics_*.py
+        # Whole tree: the v1 modules this step used to exclude were removed in
+        # the cutover. Rule set is pinned in backend/pyproject.toml so that a
+        # ruff release cannot fail a build that changed nothing.
+        run: ruff check app tests
 
       - name: Run tests
-        # Scoped to the v2 suites for the same reason as the lint step: the v1
-        # test files exercise modules that are being removed.
-        run: pytest tests/test_irt_engine.py tests/test_psychometrics_*.py -q -n auto
+        run: pytest tests -q -n auto
 
   # Tier 2: agreement with an independent implementation of the same models.
   # Scheduled rather than per-push because installing R and compiling mirt

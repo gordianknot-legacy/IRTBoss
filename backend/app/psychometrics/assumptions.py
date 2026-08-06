@@ -455,7 +455,6 @@ def velicer_map(matrix: np.ndarray) -> MapResult:
     vectors = vectors[:, order]
 
     off = ~np.eye(p, dtype=bool)
-    n_off = p * (p - 1)
 
     squared: list[float] = []
     fourth: list[float] = []
@@ -590,10 +589,12 @@ def bifactor_approximation(
     matrix = _nearest_correlation(np.asarray(matrix, dtype=float))
     p = matrix.shape[0]
     notes = [
-        "ECV, PUC and omega-hierarchical come from a principal-component "
-        "approximation to a bifactor pattern, not from a fitted bifactor "
-        "model with a rotation criterion. They indicate whether a general "
-        "factor dominates; they do not quantify specific group factors.",
+        (
+            "ECV, PUC and omega-hierarchical come from a principal-component "
+            "approximation to a bifactor pattern, not from a fitted bifactor "
+            "model with a rotation criterion. They indicate whether a general "
+            "factor dominates; they do not quantify specific group factors."
+        ),
     ]
 
     values, vectors = np.linalg.eigh(matrix)

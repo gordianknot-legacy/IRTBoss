@@ -181,7 +181,7 @@ class _Dichotomous(ItemFamily):
 
     def param_labels(self, n_cat: int) -> list[str]:
         base = ["a", "b"]
-        return base + ["c"] if self.has_guessing else base
+        return [*base, "c"] if self.has_guessing else base
 
     def probabilities(self, theta: np.ndarray, u: np.ndarray, n_cat: int) -> np.ndarray:
         a = float(np.exp(u[0]))

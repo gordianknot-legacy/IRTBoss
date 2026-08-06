@@ -72,10 +72,11 @@ def simulate(
     family = get_family(true.model)
 
     n_items = int(true.discrimination.size)
-    if true.thresholds is not None:
-        n_cat = int(np.asarray(true.thresholds).shape[1]) + 1
-    else:
-        n_cat = 2
+    n_cat = (
+        int(np.asarray(true.thresholds).shape[1]) + 1
+        if true.thresholds is not None
+        else 2
+    )
     categories = np.full(n_items, n_cat, dtype=int)
 
     theta = rng.normal(0.0, latent_sd, size=n_persons)

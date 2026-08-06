@@ -240,7 +240,6 @@ def fit(
     index = _ParameterIndex(family, n_cat, estimate_variance)
 
     patterns, pattern_counts = _compress(data.values)
-    n_pat = patterns.shape[0]
 
     # Starting values from each item's own observed responses.
     u = []

@@ -76,10 +76,10 @@ class ItemFitResult:
         """
         if self.rmsd is not None and self.rmsd > 0.10:
             return True
-        for ms in (self.infit, self.outfit):
-            if ms is not None and not (0.7 <= ms <= 1.3):
-                return True
-        return False
+        return any(
+            ms is not None and not (0.7 <= ms <= 1.3)
+            for ms in (self.infit, self.outfit)
+        )
 
 
 @dataclass(frozen=True)

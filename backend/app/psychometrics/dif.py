@@ -865,7 +865,6 @@ def _mantel(
 
     n_k = np.bincount(index, minlength=n_levels).astype(float)
     n_f = np.bincount(index[is_focal], minlength=n_levels).astype(float)
-    n_r = n_k - n_f
     sum_y = np.bincount(index, weights=y, minlength=n_levels)
     sum_y2 = np.bincount(index, weights=y**2, minlength=n_levels)
     sum_y_focal = np.bincount(index[is_focal], weights=y[is_focal], minlength=n_levels)
@@ -1133,10 +1132,8 @@ def _irt_lr_screen(
 
     anchors = list(range(n_items))
     results: list[IRTLikelihoodRatioResult | None] = [None] * n_items
-    completed = 0
 
     for pass_index in range(1, max(passes, 1) + 1):
-        completed = pass_index
         results = [
             _irt_lr_item(
                 j=j,
