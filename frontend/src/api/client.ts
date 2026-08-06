@@ -1,233 +1,131 @@
-/// <reference types="vite/client" />
 /**
- * API client for IRTBoss backend.
+ * HTTP client.
  *
- * All API calls are made through these functions to ensure
- * consistent error handling and type safety.
+ * The session is an HttpOnly cookie set by `POST /auth/login` and `/register`
+ * (`backend/app/api/routers/auth.py::_set_session_cookie`), so script cannot
+ * read it and there is no token to attach by hand. Every request therefore sets
+ * `credentials: 'include'`. The backend's CORS middleware runs with
+ * `allow_credentials=True` and an explicit origin allowlist, so this works
+ * cross-origin too — but the dev server proxies `/api` to keep the browser on
+ * one origin, which avoids the SameSite=Lax cookie being dropped.
+ *
+ * There is no `axios` here and no interceptor stack: the only cross-cutting
+ * concerns are credentials and error shaping, both of which fit in this file.
  */
 
-import type {
-  ProjectCreate,
-  ProjectResponse,
-  UploadResponse,
-  FittingJobCreate,
-  FittingJobResponse,
-  FittingProgress,
-  ModelResultResponse,
-  DiagnosticsResponse,
-  ICCResponse,
-  RecommendationsResponse,
-  ReportRequest,
-  ReportResponse,
-  HealthCheckResponse,
-} from './types'
-
-// API base URL - can be configured via environment variable
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
+const BASE = '/api/v1'
 
 /**
- * Custom error class for API errors
+ * A failed request, with the backend's own message preserved.
+ *
+ * The upload and analysis routes author their `detail` strings for users
+ * (`ingest.InvalidUpload`, the unsupported-model 422, the 409 on results for an
+ * incomplete run). Replacing them with a generic string would throw away the
+ * only part of the error that tells someone what to change.
  */
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    public statusText: string,
-    public detail?: string
-  ) {
-    super(detail || `${status} ${statusText}`)
+  readonly status: number
+  /** FastAPI's `detail`, normalised. Pydantic validation errors arrive as arrays. */
+  readonly detail: string
+  readonly fieldErrors: { field: string; message: string }[]
+
+  constructor(status: number, detail: string, fieldErrors: { field: string; message: string }[] = []) {
+    super(detail)
     this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+    this.fieldErrors = fieldErrors
+  }
+
+  get isUnauthenticated(): boolean {
+    return this.status === 401
   }
 }
 
-/**
- * Make a fetch request with error handling
- */
-async function fetchApi<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
-
-  if (!response.ok) {
-    let detail: string | undefined
-    try {
-      const errorData = await response.json()
-      detail = errorData.detail
-    } catch {
-      // Ignore JSON parse errors
-    }
-    throw new ApiError(response.status, response.statusText, detail)
-  }
-
-  return response.json()
+interface PydanticError {
+  loc?: unknown[]
+  msg?: string
 }
 
-// --- Health Check ---
-
-export async function checkHealth(): Promise<HealthCheckResponse> {
-  return fetchApi<HealthCheckResponse>('/health')
-}
-
-// --- Projects ---
-
-export async function createProject(
-  data: ProjectCreate
-): Promise<ProjectResponse> {
-  return fetchApi<ProjectResponse>('/projects', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function getProject(projectId: string): Promise<ProjectResponse> {
-  return fetchApi<ProjectResponse>(`/projects/${projectId}`)
-}
-
-export async function listProjects(
-  limit = 20,
-  offset = 0
-): Promise<ProjectResponse[]> {
-  return fetchApi<ProjectResponse[]>(
-    `/projects?limit=${limit}&offset=${offset}`
-  )
-}
-
-// --- Data Upload ---
-
-export async function uploadData(
-  projectId: string,
-  file: File
-): Promise<UploadResponse> {
-  const formData = new FormData()
-  formData.append('file', file)
-
-  const url = `${API_BASE_URL}/projects/${projectId}/upload`
-  const response = await fetch(url, {
-    method: 'POST',
-    body: formData,
-  })
-
-  if (!response.ok) {
-    let detail: string | undefined
-    try {
-      const errorData = await response.json()
-      detail = errorData.detail
-    } catch {
-      // Ignore JSON parse errors
-    }
-    throw new ApiError(response.status, response.statusText, detail)
-  }
-
-  return response.json()
-}
-
-// --- Model Fitting ---
-
-export async function startFitting(
-  data: FittingJobCreate
-): Promise<FittingJobResponse> {
-  return fetchApi<FittingJobResponse>(`/projects/${data.project_id}/fit`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-}
-
-export async function getJobStatus(jobId: string): Promise<FittingJobResponse> {
-  return fetchApi<FittingJobResponse>(`/jobs/${jobId}`)
-}
-
-export async function getJobProgress(jobId: string): Promise<FittingProgress> {
-  return fetchApi<FittingProgress>(`/jobs/${jobId}/progress`)
-}
-
-/**
- * Poll job status until completion or failure.
- * Returns the final job status.
- */
-export async function pollJobUntilComplete(
-  jobId: string,
-  onProgress?: (progress: FittingProgress) => void,
-  intervalMs = 2000
-): Promise<FittingJobResponse> {
-  return new Promise((resolve, reject) => {
-    const poll = async () => {
-      try {
-        const progress = await getJobProgress(jobId)
-
-        if (onProgress) {
-          onProgress(progress)
+function normaliseDetail(body: unknown, status: number): {
+  detail: string
+  fieldErrors: { field: string; message: string }[]
+} {
+  if (body != null && typeof body === 'object' && 'detail' in body) {
+    const raw = (body as { detail: unknown }).detail
+    if (typeof raw === 'string') return { detail: raw, fieldErrors: [] }
+    if (Array.isArray(raw)) {
+      const fieldErrors = raw.map((entry) => {
+        const e = entry as PydanticError
+        const loc = Array.isArray(e.loc) ? e.loc.filter((p) => p !== 'body') : []
+        return {
+          field: loc.map(String).join('.') || 'request',
+          message: typeof e.msg === 'string' ? e.msg : 'is invalid',
         }
-
-        if (progress.status === 'completed' || progress.status === 'failed') {
-          const job = await getJobStatus(jobId)
-          resolve(job)
-        } else {
-          setTimeout(poll, intervalMs)
-        }
-      } catch (error) {
-        reject(error)
+      })
+      return {
+        detail: fieldErrors.map((f) => `${f.field}: ${f.message}`).join('; '),
+        fieldErrors,
       }
     }
-
-    poll()
-  })
+  }
+  return { detail: `Request failed with status ${status}`, fieldErrors: [] }
 }
 
-// --- Results ---
-
-export async function getResults(
-  projectId: string
-): Promise<ModelResultResponse> {
-  return fetchApi<ModelResultResponse>(`/projects/${projectId}/results`)
+async function handle<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T
+  const text = await response.text()
+  let body: unknown = null
+  if (text) {
+    try {
+      body = JSON.parse(text)
+    } catch {
+      body = null
+    }
+  }
+  if (!response.ok) {
+    const { detail, fieldErrors } = normaliseDetail(body, response.status)
+    throw new ApiError(response.status, detail, fieldErrors)
+  }
+  return body as T
 }
 
-export async function getDiagnostics(
-  projectId: string
-): Promise<DiagnosticsResponse> {
-  return fetchApi<DiagnosticsResponse>(`/projects/${projectId}/diagnostics`)
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(`${BASE}${path}`, { credentials: 'include', ...init })
+  } catch {
+    // A network-level failure is not a 500 and must not be reported as one.
+    throw new ApiError(0, 'Could not reach the API. It may be down, or this browser may be offline.')
+  }
+  return handle<T>(response)
 }
 
-export async function getItemICC(
-  projectId: string,
-  itemId: string
-): Promise<ICCResponse> {
-  return fetchApi<ICCResponse>(
-    `/projects/${projectId}/diagnostics/icc/${encodeURIComponent(itemId)}`
-  )
+export function get<T>(path: string): Promise<T> {
+  return request<T>(path, { method: 'GET' })
 }
 
-// --- Recommendations ---
-
-export async function getRecommendations(
-  projectId: string
-): Promise<RecommendationsResponse> {
-  return fetchApi<RecommendationsResponse>(
-    `/projects/${projectId}/recommendations`
-  )
-}
-
-// --- Reports ---
-
-export async function generateReport(
-  data: ReportRequest
-): Promise<ReportResponse> {
-  return fetchApi<ReportResponse>(`/projects/${data.project_id}/report`, {
+export function post<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
     method: 'POST',
-    body: JSON.stringify(data),
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
   })
 }
 
-export function getReportDownloadUrl(
-  projectId: string,
-  format: string
-): string {
-  return `${API_BASE_URL}/projects/${projectId}/report/${format}`
+export function patch<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export function del<T>(path: string): Promise<T> {
+  return request<T>(path, { method: 'DELETE' })
+}
+
+/** Multipart. No Content-Type header — the browser must set the boundary. */
+export function postForm<T>(path: string, form: FormData): Promise<T> {
+  return request<T>(path, { method: 'POST', body: form })
 }

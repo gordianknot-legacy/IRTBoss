@@ -1,0 +1,97 @@
+/*
+ * IRTBoss design tokens — the single source of truth for colour.
+ *
+ * Values are space-separated RGB channels so Tailwind's `<alpha-value>` slot
+ * works (`rgb(var(--c-ink) / 0.6)`).
+ *
+ * The look is a printed technical dossier: warm paper, near-black ink, hairline
+ * rules, one ink-blue accent, and semantic colours that describe *epistemic*
+ * states rather than good/bad outcomes.
+ *
+ *   accent     the product's own voice — links, active nav, chart primary
+ *   attention  "look at this" — item-fit and DIF flags. Never "this is wrong".
+ *   absent     "there is no number here" — the marker for every null. Given its
+ *              own hue precisely so a reader can never confuse it with a value.
+ *   alarm      something failed to run, or the run itself failed
+ *   steady     a computation completed; used sparingly, never as a verdict
+ */
+
+:root {
+  color-scheme: light;
+
+  --c-canvas: 246 244 239;
+  --c-surface: 255 254 252;
+  --c-raised: 255 255 255;
+  --c-sunken: 238 235 228;
+
+  --c-ink: 26 26 27;
+  --c-ink-muted: 92 90 86;
+  --c-ink-faint: 138 134 127;
+  --c-ink-inverse: 252 251 249;
+
+  --c-rule: 223 219 210;
+  --c-rule-strong: 190 185 174;
+
+  --c-accent: 30 74 138;
+  --c-accent-soft: 226 234 246;
+
+  --c-attention: 158 88 8;
+  --c-attention-soft: 249 238 220;
+
+  --c-absent: 108 92 132;
+  --c-absent-soft: 238 234 243;
+
+  --c-alarm: 154 42 42;
+  --c-alarm-soft: 249 231 231;
+
+  --c-steady: 32 92 76;
+  --c-steady-soft: 226 240 235;
+
+  /* Chart series, in fixed order. Never cycled, never reassigned by rank.
+     Both modes pass `dataviz/scripts/validate_palette.js` on all six checks
+     against their own surface — light #FFFEFC, dark #1B1B1E. */
+  --c-series-1: 46 111 196;
+  --c-series-2: 194 98 26;
+
+  --c-shadow: 40 34 24;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --c-canvas: 20 20 22;
+    --c-surface: 27 27 30;
+    --c-raised: 34 34 38;
+    --c-sunken: 15 15 17;
+
+    --c-ink: 234 232 228;
+    --c-ink-muted: 165 162 156;
+    --c-ink-faint: 120 117 112;
+    --c-ink-inverse: 20 20 22;
+
+    --c-rule: 55 55 60;
+    --c-rule-strong: 82 82 88;
+
+    --c-accent: 130 172 233;
+    --c-accent-soft: 30 42 60;
+
+    --c-attention: 224 166 82;
+    --c-attention-soft: 56 43 22;
+
+    --c-absent: 178 160 206;
+    --c-absent-soft: 44 38 55;
+
+    --c-alarm: 233 133 133;
+    --c-alarm-soft: 58 30 30;
+
+    --c-steady: 122 199 175;
+    --c-steady-soft: 22 46 40;
+
+    /* Re-stepped for the dark surface, not flipped. */
+    --c-series-1: 92 147 220;
+    --c-series-2: 200 126 44;
+
+    --c-shadow: 0 0 0;
+  }
+}
