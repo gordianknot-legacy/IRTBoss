@@ -1,70 +1,92 @@
+"""Engine and session lifecycle.
+
+The engine is built lazily on first use rather than at import time. v1 created
+it as a module-level side effect, which meant importing anything under ``app.db``
+opened a connection pool against whatever ``DATABASE_URL`` happened to be set —
+including during test collection, and including in the worker where a *different*
+(and undeclared) driver was expected (P5).
+
+``create_all`` exists here only for tests. Production schema changes go through
+Alembic; ARCHITECTURE §6 makes that a rule, and v1's total absence of migrations
+is what it is reacting to.
 """
-Database connection and session management for IRTBoss.
 
-Uses SQLAlchemy 2.0 async engine with asyncpg for PostgreSQL.
-"""
+from __future__ import annotations
 
-import os
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
-
-# Get database URL from environment or use default for development
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://irtboss:irtboss_dev@localhost:5432/irtboss"
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
 
-# Ensure we're using asyncpg driver
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+from app.core.config import get_settings
 
-# Create async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=os.getenv("SQL_ECHO", "false").lower() == "true",
-    poolclass=NullPool,  # Use NullPool for better async compatibility
-)
+from .models import Base
 
-# Create session factory
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
+_engine: AsyncEngine | None = None
+_sessionmaker: async_sessionmaker[AsyncSession] | None = None
+
+
+def get_engine() -> AsyncEngine:
+    """Process-wide async engine, created on first call."""
+
+    global _engine
+    if _engine is None:
+        settings = get_settings()
+        _engine = create_async_engine(
+            settings.database_url,
+            echo=settings.sql_echo,
+            pool_pre_ping=True,
+        )
+    return _engine
+
+
+def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
+    global _sessionmaker
+    if _sessionmaker is None:
+        _sessionmaker = async_sessionmaker(
+            get_engine(), class_=AsyncSession, expire_on_commit=False
+        )
+    return _sessionmaker
+
+
+def set_engine(engine: AsyncEngine) -> None:
+    """Install an engine explicitly.
+
+    Used by tests and by the worker, both of which build their own engine and
+    would otherwise race the lazy constructor.
+    """
+
+    global _engine, _sessionmaker
+    _engine = engine
+    _sessionmaker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+async def dispose_engine() -> None:
+    global _engine, _sessionmaker
+    if _engine is not None:
+        await _engine.dispose()
+    _engine = None
+    _sessionmaker = None
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Dependency that provides a database session.
+    """FastAPI dependency yielding a session with commit-on-success semantics."""
 
-    Usage in FastAPI:
-        @router.get("/items")
-        async def get_items(db: AsyncSession = Depends(get_db)):
-            ...
-    """
-    async with AsyncSessionLocal() as session:
+    async with get_sessionmaker()() as session:
         try:
             yield session
             await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
 
 
-async def init_db():
-    """Initialize database tables."""
-    from .models import Base
+async def create_all(engine: AsyncEngine) -> None:
+    """Create the schema directly. Tests only — see the module docstring."""
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-
-async def close_db():
-    """Close database connections."""
-    await engine.dispose()
