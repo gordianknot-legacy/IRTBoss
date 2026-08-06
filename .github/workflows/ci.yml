@@ -49,6 +49,77 @@ jobs:
       - name: Run tests
         run: pytest tests -q -n auto
 
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # `npm run build` runs `tsc -b` first, so this is the type check too.
+      - run: npm run build
+      - run: npm run lint
+      - run: npm run test
+
+  # The same application tests against the database the product deploys on.
+  # Separate from the job above so that a Postgres-only failure is legible as
+  # one: JSONB rather than JSON, native uuid columns and real ON DELETE CASCADE
+  # are all invisible under SQLite, so this is the only place they are covered.
+  postgres:
+    name: Application tests on PostgreSQL
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: irtboss
+          POSTGRES_PASSWORD: irtboss
+          POSTGRES_DB: irtboss_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check the migration applies to an empty database
+        # Alembic, not create_all: the tests build the schema from the models,
+        # so nothing else would notice a migration that drifted from them.
+        env:
+          IRTBOSS_DATABASE_URL: postgresql+asyncpg://irtboss:irtboss@localhost:5432/irtboss_test
+        run: alembic upgrade head && alembic downgrade base
+
+      - name: Run the application tests
+        env:
+          IRTBOSS_TEST_DATABASE_URL: postgresql+asyncpg://irtboss:irtboss@localhost:5432/irtboss_test
+        # Scoped to the suites that touch the database. The psychometrics tests
+        # are pure numerics and would only be re-running the job above.
+        run: pytest tests/test_api_*.py tests/test_worker_pipeline.py tests/test_config_and_schema.py -q
+
   # Tier 2: agreement with an independent implementation of the same models.
   # Scheduled rather than per-push because installing R and compiling mirt
   # dominates the runtime.

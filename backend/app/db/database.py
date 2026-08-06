@@ -90,3 +90,10 @@ async def create_all(engine: AsyncEngine) -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def drop_all(engine: AsyncEngine) -> None:
+    """Drop the schema. Tests only, and only against a disposable database."""
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)

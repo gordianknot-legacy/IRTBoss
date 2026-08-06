@@ -1,95 +1,90 @@
-# IRTBoss Docker Compose Configuration
-# For local development and testing
-
-version: '3.8'
+# Local full-stack development.
+#
+# This is also the only way to exercise the parts of the system the test suite
+# cannot reach on a developer machine: the tests run against SQLite and
+# fakeredis, so Postgres-specific behaviour (JSONB, native uuid, ON DELETE
+# CASCADE) and a real RQ worker dequeuing a real job are only covered here.
+#
+# Every backend setting is read with the IRTBOSS_ prefix — see
+# backend/app/core/config.py. v1's compose file set DATABASE_URL and REDIS_URL,
+# which the application never read, so the containers silently used the
+# localhost defaults and could not reach these services at all.
 
 services:
-  # PostgreSQL Database
   db:
     image: postgres:16-alpine
-    ports:
-      - "5432:5432"
     environment:
-      - POSTGRES_USER=irtboss
-      - POSTGRES_PASSWORD=irtboss_dev
-      - POSTGRES_DB=irtboss
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+      POSTGRES_USER: irtboss
+      POSTGRES_PASSWORD: irtboss_dev
+      POSTGRES_DB: irtboss
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U irtboss -d irtboss"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  # Backend API
-  api:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://irtboss:irtboss_dev@db:5432/irtboss
-      - REDIS_URL=redis://redis:6379/0
-      - LOG_LEVEL=INFO
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ../backend/app:/app/app:ro  # For development hot-reload
-      - uploads:/app/uploads
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Redis for task queue
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
+    ports: ["6379:6379"]
+    volumes: ["redis-data:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 10
 
-  # Worker for background tasks
-  worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: rq worker --url redis://redis:6379/0 irtboss
-    environment:
-      - DATABASE_URL=postgresql://irtboss:irtboss_dev@db:5432/irtboss
-      - REDIS_URL=redis://redis:6379/0
+  # Runs migrations to completion, then exits. The API and worker wait on it,
+  # so neither can come up against a schema that does not match the code.
+  migrate:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    command: alembic upgrade head
+    environment: &backend-env
+      IRTBOSS_ENVIRONMENT: development
+      IRTBOSS_DATABASE_URL: postgresql+asyncpg://irtboss:irtboss_dev@db:5432/irtboss
+      IRTBOSS_REDIS_URL: redis://redis:6379/0
+      IRTBOSS_SECRET_KEY: local-development-secret-not-for-deployment
+      IRTBOSS_UPLOAD_DIR: /app/var/uploads
+      IRTBOSS_CORS_ALLOW_ORIGINS: http://localhost:5173
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ../backend/app:/app/app:ro
-      - uploads:/app/uploads
+      db: { condition: service_healthy }
 
-  # Frontend (optional, for full-stack development)
-  # frontend:
-  #   build:
-  #     context: ../frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - api
-  #   environment:
-  #     - VITE_API_URL=http://localhost:8000
+  api:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    ports: ["8000:8000"]
+    environment: *backend-env
+    volumes: ["uploads:/app/var/uploads"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  worker:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    command: python -m app.workers.main
+    environment: *backend-env
+    # The same volume as the API, because the worker reads the CSV the API
+    # wrote. This is exactly the coupling that stops working once the two run on
+    # different hosts; see docs/v2/DEPLOYMENT.md.
+    volumes: ["uploads:/app/var/uploads"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports: ["5173:5173"]
+    environment:
+      VITE_API_URL: http://localhost:8000/api/v1
+    volumes:
+      - ../frontend:/app
+      - frontend-modules:/app/node_modules
+    depends_on: [api]
 
 volumes:
   postgres-data:
   redis-data:
   uploads:
+  frontend-modules:

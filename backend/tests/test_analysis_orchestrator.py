@@ -82,6 +82,68 @@ def test_dataclasses_enums_and_numpy_all_convert():
     json.dumps(payload, allow_nan=False)
 
 
+def test_declared_properties_are_serialised():
+    """`dataclasses.fields()` skips properties, so they must be opted in."""
+
+    @dataclass(frozen=True)
+    class WithProperty:
+        raw: int
+        JSON_PROPERTIES = ("doubled", "verdict")
+
+        @property
+        def doubled(self) -> int:
+            return self.raw * 2
+
+        @property
+        def verdict(self) -> bool:
+            return self.raw > 0
+
+    assert to_jsonable(WithProperty(raw=3)) == {
+        "raw": 3,
+        "doubled": 6,
+        "verdict": True,
+    }
+
+
+def test_every_declared_property_survives_to_the_payload():
+    """A guard against the way this can silently half-work.
+
+    ``JSON_PROPERTIES`` is a plain class attribute, so a second declaration
+    lower in the same class body overwrites the first with no error. That is
+    exactly what happened to ``DIFResult.flagged_by``: two declarations, the
+    later one naming only ``flagged``, and the method-by-method breakdown of why
+    an item was flagged quietly stopped being serialised while everything still
+    looked fine.
+
+    This walks every result class the diagnostics return and checks that each
+    name it declares actually appears in its serialised form.
+    """
+    import dataclasses
+    import importlib
+
+    modules = [
+        importlib.import_module(f"app.psychometrics.{name}")
+        for name in ("itemfit", "dif", "assumptions", "comparison")
+    ]
+
+    checked = 0
+    for module in modules:
+        for obj in vars(module).values():
+            if not (isinstance(obj, type) and dataclasses.is_dataclass(obj)):
+                continue
+            declared = getattr(obj, "JSON_PROPERTIES", ())
+            for name in declared:
+                assert isinstance(getattr(obj, name, None), property), (
+                    f"{obj.__name__}.JSON_PROPERTIES names {name!r}, "
+                    "which is not a property on that class"
+                )
+                checked += 1
+
+    # If this drops to zero the opt-in mechanism has been removed and every
+    # assertion above passes vacuously.
+    assert checked >= 8
+
+
 def test_tuple_keys_are_joined_rather_than_dropped():
     """Item-pair tables are keyed by tuples and must survive."""
     payload = to_jsonable({("i1", "i2"): 0.31})

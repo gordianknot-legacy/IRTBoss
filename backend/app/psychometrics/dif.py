@@ -190,7 +190,7 @@ class LogisticDIFResult:
     n_used: int
     notes: list[str] = field(default_factory=list)
 
-    JSON_PROPERTIES = ('flagged',)
+    JSON_PROPERTIES = ('flagged', 'is_nonuniform')
 
     @property
     def flagged(self) -> bool:
@@ -264,8 +264,6 @@ class DIFResult:
         ):
             out.append("irt_lr")
         return out
-
-    JSON_PROPERTIES = ('flagged',)
 
     @property
     def flagged(self) -> bool:
