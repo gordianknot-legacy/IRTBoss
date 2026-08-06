@@ -194,6 +194,8 @@ class PolychoricMatrix:
     min_pair_n: int
     notes: list[str] = field(default_factory=list)
 
+    JSON_PROPERTIES = ('is_positive_definite',)
+
     @property
     def is_positive_definite(self) -> bool:
         return bool(np.linalg.eigvalsh(self.matrix).min() > 1e-10)
@@ -724,6 +726,8 @@ class UnidimensionalityReport:
     omega_hierarchical: float
 
     notes: list[str] = field(default_factory=list)
+
+    JSON_PROPERTIES = ('essentially_unidimensional',)
 
     @property
     def essentially_unidimensional(self) -> bool | None:

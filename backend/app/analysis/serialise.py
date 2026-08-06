@@ -14,6 +14,13 @@ discovered at insert time.
 **numpy scalars are not Python scalars.** ``np.float64`` serialises only by
 accident of subclassing, and ``np.int64`` not at all. Converting explicitly
 means a new numpy type in a diagnostic cannot fail a run at commit time.
+
+And one hazard that is not about types at all: ``dataclasses.fields()`` returns
+declared fields only, so a ``@property`` is dropped. Several results express
+their most consequential conclusion as a property - ``flagged`` on an item fit
+result, ``usable`` on a model's evidence - and those would silently never reach
+a report. Classes opt those in by declaring :data:`JSON_PROPERTIES`; see
+:func:`to_jsonable`.
 """
 
 from __future__ import annotations
@@ -54,10 +61,16 @@ def to_jsonable(value: Any) -> Any:
         return [to_jsonable(v) for v in value.tolist()]
 
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {
+        out = {
             f.name: to_jsonable(getattr(value, f.name))
             for f in dataclasses.fields(value)
         }
+        # Opt-in properties. Declared rather than discovered: serialising every
+        # property automatically would export internals nobody chose to publish,
+        # and would make adding a private helper property a schema change.
+        for name in getattr(type(value), "JSON_PROPERTIES", ()):
+            out[name] = to_jsonable(getattr(value, name))
+        return out
 
     if isinstance(value, dict):
         # Keys must be strings in JSON. Tuple keys - item pairs, group pairs -

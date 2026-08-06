@@ -108,6 +108,8 @@ class ModelEvidence:
     failure_reason: str | None = None
     notes: list[str] = field(default_factory=list)
 
+    JSON_PROPERTIES = ('usable',)
+
     @property
     def usable(self) -> bool:
         return self.converged and self.cv_log_likelihood is not None
@@ -158,6 +160,8 @@ class ComparisonDossier:
     n_folds: int
     seed: int
     notes: list[str] = field(default_factory=list)
+
+    JSON_PROPERTIES = ('criteria_agree',)
 
     @property
     def criteria_agree(self) -> bool:

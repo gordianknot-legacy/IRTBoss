@@ -59,6 +59,8 @@ class ItemFitResult:
     n_used: int
     notes: list[str] = field(default_factory=list)
 
+    JSON_PROPERTIES = ('flagged',)
+
     @property
     def flagged(self) -> bool:
         """Whether the *effect sizes* warrant a look, ignoring p-values.

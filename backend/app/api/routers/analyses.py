@@ -18,6 +18,7 @@ import uuid
 from functools import lru_cache
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import HTMLResponse
 
 from app.api.deps import (
     AnalysisRepoDep,
@@ -125,6 +126,34 @@ async def list_runs(
     if await datasets.get(dataset_id) is None:
         raise not_found("Dataset")
     return [AnalysisRunOut.model_validate(r) for r in await runs.list_for_dataset(dataset_id)]
+
+
+@router.get("/analyses/{run_id}/report", response_class=HTMLResponse)
+async def get_report(run_id: uuid.UUID, runs: AnalysisRepoDep) -> HTMLResponse:
+    """The rendered report, as a self-contained HTML document.
+
+    Rendered on demand from the stored result rather than at completion time and
+    cached: the run's stored payload is immutable, so rendering is a pure
+    function of it, and a template improvement then applies to every past run
+    instead of only to runs analysed after the deploy.
+    """
+
+    run = await runs.get_for_report(run_id)
+    if run is None:
+        raise not_found("Analysis run")
+    if run.status is not RunStatus.SUCCEEDED:
+        # Consistent with the results endpoint. A report for an incomplete run
+        # would be a document of absent numbers laid out as findings, which is
+        # more misleading than no document at all.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Run is {run.status.value}; there is no report to render",
+        )
+
+    from app.reports import render_run
+
+    html = render_run(run=run, dataset=run.dataset, project=run.dataset.project)
+    return HTMLResponse(content=html)
 
 
 @router.get("/analyses/{run_id}/results", response_model=AnalysisResultOut)

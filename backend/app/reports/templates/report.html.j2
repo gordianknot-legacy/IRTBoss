@@ -1,0 +1,718 @@
+{#
+  The analysis report.
+
+  Conventions used throughout, all of them deliberate:
+
+  * Payload fields are read with `.get(...)`, never with `[...]`. The diagnostics
+    payload legitimately varies — local independence is absent when no model
+    converged, DIF is absent when no groups were supplied — and a missing
+    section must render as a stated absence, not raise. Variables that should
+    always exist are accessed directly, so that a genuine mistake still trips
+    StrictUndefined.
+  * Every number goes through a filter that renders absence as ABSENT. No
+    template branch prints a bare value.
+  * No threshold is applied to filter or reorder anything. Where a conventional
+    band is mentioned it is stated to the reader as a reading guide.
+#}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ ctx.project.name }} — analysis report</title>
+<style>
+  :root {
+    --ink: #16181d; --muted: #5b6270; --line: #dfe3ea; --bg: #ffffff;
+    --panel: #f7f8fa; --accent: #1c4e80; --warn-bg: #fff8e6; --warn-line: #e0b040;
+    --absent: #8a919e; --flag-bg: #fdf0ed; --flag-line: #d1705a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.5rem; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.75rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  h2 {
+    font-size: 1.2rem; margin: 2.75rem 0 .75rem; padding-bottom: .35rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  h3 { font-size: 1rem; margin: 1.75rem 0 .5rem; }
+  p { margin: .5rem 0; }
+  .sub { color: var(--muted); margin: 0 0 1.5rem; }
+  table { border-collapse: collapse; width: 100%; margin: .75rem 0; font-size: .9rem; }
+  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); white-space: nowrap; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .absent { color: var(--absent); font-style: italic; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1rem 1.25rem; margin: 1rem 0; }
+  .note { background: var(--warn-bg); border-left: 4px solid var(--warn-line); padding: .75rem 1rem; margin: .6rem 0; }
+  .flag { background: var(--flag-bg); border-left: 4px solid var(--flag-line); padding: .75rem 1rem; margin: .6rem 0; }
+  .kv { display: grid; grid-template-columns: 14rem 1fr; gap: .3rem 1rem; font-size: .9rem; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-all; }
+  ul { margin: .5rem 0; padding-left: 1.25rem; }
+  li { margin: .3rem 0; }
+  .tag { display: inline-block; font-size: .75rem; padding: .1rem .5rem; border-radius: 3px; background: var(--accent); color: #fff; vertical-align: middle; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+  @media print { body { padding: 0; } h2 { page-break-after: avoid; } table { page-break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+
+{% macro absent() %}<span class="absent">{{ ABSENT }}</span>{% endmacro %}
+
+{#- Renders a value through a filter, marking absence visually. -#}
+{% macro cell(text) %}
+  {% if text == ABSENT %}{{ absent() }}{% else %}{{ text }}{% endif %}
+{% endmacro %}
+
+<h1>{{ ctx.project.name }}</h1>
+<p class="sub">
+  Analysis report · {{ ctx.run.status }} ·
+  generated {{ ctx.generated_at | timestamp }}
+</p>
+
+{% if ctx.project.description %}
+<p>{{ ctx.project.description }}</p>
+{% endif %}
+
+{# ---------------------------------------------------------------- status #}
+{% if ctx.run.status != 'succeeded' %}
+<div class="flag">
+  <strong>This run did not produce results.</strong>
+  <p>
+    Status is <strong>{{ ctx.run.status }}</strong>.
+    {% if ctx.run.failure_reason %}The recorded reason is: {{ ctx.run.failure_reason }}{% endif %}
+  </p>
+  <p>
+    Nothing below should be read as a finding about the instrument. A run that
+    did not complete has no results to report, only a record that it did not.
+  </p>
+</div>
+{% endif %}
+
+{# ------------------------------------------------------------- guidance #}
+{% if ctx.guidance %}
+<div class="panel">
+  <strong>How to read this report</strong>
+  {% for line in ctx.guidance %}
+  <p>{{ line }}</p>
+  {% endfor %}
+  <p>
+    Conventional cut-offs appear below as reading guides. Nothing in this report
+    has been filtered, reordered or hidden by them, and no statistic has been
+    turned into a pass or a fail.
+  </p>
+</div>
+{% endif %}
+
+{# ---------------------------------------------------------------- notes #}
+{% if ctx.notes %}
+<h2>What the analysis decided</h2>
+<p>
+  These statements record choices made while running the analysis. They are part
+  of the result: each one describes something that was excluded, assumed or left
+  undetermined.
+</p>
+{% for note in ctx.notes %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
+{% set failures = ctx.diagnostics.get('failures') or [] %}
+{% if failures %}
+<h2>Diagnostics that could not be computed</h2>
+<div class="flag">
+  <p>
+    <strong>{{ failures | length }}
+    {{ 'diagnostic' if failures | length == 1 else 'diagnostics' }}
+    failed to compute.</strong>
+    The statistics they would have produced are absent from this report. They
+    are not zero, and their absence is not evidence that nothing was wrong.
+  </p>
+  <table>
+    <thead><tr><th>Diagnostic</th><th>Reason</th></tr></thead>
+    <tbody>
+    {% for failure in failures %}
+      <tr>
+        <td>{{ failure.get('diagnostic') }}</td>
+        <td>{{ failure.get('error') }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# --------------------------------------------------------------- sample #}
+{% set sample = ctx.diagnostics.get('sample') %}
+<h2>The data</h2>
+<dl class="kv">
+  <dt>File</dt><dd>{{ ctx.dataset.original_filename }}</dd>
+  <dt>Respondents analysed</dt>
+  <dd>{{ cell(sample.get('n_persons') | integer) if sample else absent() }}</dd>
+  <dt>Items analysed</dt>
+  <dd>{{ cell(sample.get('n_items') | integer) if sample else absent() }}</dd>
+  <dt>Responses missing</dt>
+  <dd>{{ cell(sample.get('missing_rate') | percent) if sample else absent() }}</dd>
+  <dt>Response type</dt>
+  <dd>
+    {% if sample %}{{ 'Polytomous' if sample.get('is_polytomous') else 'Dichotomous' }}
+    {% else %}{{ absent() }}{% endif %}
+  </dd>
+</dl>
+
+{% set validation = ctx.diagnostics.get('validation') %}
+{% set dropped = (validation or {}).get('dropped_items') or [] %}
+{% if dropped %}
+<h3>Columns excluded before analysis</h3>
+<p>
+  These columns were in the file and are not in the analysis. They contribute to
+  nothing below.
+</p>
+<table>
+  <thead><tr><th>Column</th><th>Why it was excluded</th></tr></thead>
+  <tbody>
+  {% for item in dropped %}
+    <tr><td>{{ item.get('item_id') }}</td><td>{{ item.get('reason') }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{# ----------------------------------------------------------- comparison #}
+<h2>Model comparison</h2>
+{% set dossier = ctx.diagnostics.get('comparison') %}
+{% if not dossier %}
+<p>
+  {% if ctx.fits | length <= 1 %}
+  Only one model was fitted, so there is nothing to compare. A single model's
+  fit statistics describe how well it accounts for the data; they cannot say
+  whether a different model would account for it better.
+  {% else %}
+  {{ absent() }} — the comparison did not run. Check the failures listed above.
+  {% endif %}
+</p>
+{% else %}
+<p>
+  Models are ranked by <strong>held-out predictive log-likelihood</strong>: each
+  respondent is held out exactly once across {{ cell(dossier.get('n_folds') | integer) }}
+  folds, and each model is scored on respondents it was not fitted to. This is
+  the primary criterion because it measures what a model does with data it has
+  not seen, which is the only thing a report can promise about future
+  respondents.
+</p>
+<p>
+  <strong>This report does not name a best model.</strong> Every criterion below
+  is shown with its own result, and where they disagree the disagreement is
+  reported rather than resolved.
+</p>
+
+{% if dossier.get('verdict') %}
+<div class="panel"><strong>Summary:</strong> {{ dossier.get('verdict') }}</div>
+{% endif %}
+
+{% if dossier.get('indistinguishable') %}
+<div class="note">
+  <strong>The leading models are statistically indistinguishable</strong> on
+  held-out predictive log-likelihood — the difference between them is within the
+  uncertainty of the estimate. Choosing between them on this evidence would be
+  choosing on noise. If one must be chosen, the grounds are parsimony,
+  interpretability or precedent, and those grounds belong on the record.
+</div>
+{% endif %}
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th><th class="n">Held-out log-likelihood</th>
+      <th class="n">Per respondent</th><th class="n">SE</th>
+      <th class="n">Free parameters</th><th class="n">AIC</th><th class="n">BIC</th>
+      <th>Converged</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in dossier.get('ranked') or [] %}
+    <tr>
+      <td>{{ row.get('model') }}</td>
+      <td class="n">{{ cell(row.get('cv_log_likelihood') | num(1)) }}</td>
+      <td class="n">{{ cell(row.get('cv_per_respondent') | num(4)) }}</td>
+      <td class="n">{{ cell(row.get('cv_standard_error') | num(4)) }}</td>
+      <td class="n">{{ cell(row.get('n_free_parameters') | integer) }}</td>
+      <td class="n">{{ cell(row.get('aic') | num(1)) }}</td>
+      <td class="n">{{ cell(row.get('bic') | num(1)) }}</td>
+      <td>{{ row.get('converged') | yes_no }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% for row in dossier.get('ranked') or [] %}
+  {% if row.get('failure_reason') %}
+<div class="note">
+  <strong>{{ row.get('model') }}:</strong> {{ row.get('failure_reason') }}
+</div>
+  {% endif %}
+{% endfor %}
+
+{% set disagreements = dossier.get('disagreements') or [] %}
+{% if disagreements %}
+<h3>Where the criteria disagree</h3>
+<p>
+  Different criteria penalise complexity differently, so they can rank models
+  differently on the same data. A disagreement is information: it means the
+  ranking depends on the criterion, and so the choice cannot be delegated to
+  the arithmetic.
+</p>
+<table>
+  <thead><tr><th>Criterion</th><th>Ranks first</th><th>Criterion</th><th>Ranks first</th></tr></thead>
+  <tbody>
+  {% for d in disagreements %}
+    <tr>
+      <td>{{ d.get('criterion_a') }}</td><td>{{ d.get('first_a') }}</td>
+      <td>{{ d.get('criterion_b') }}</td><td>{{ d.get('first_b') }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% elif dossier.get('rankings') %}
+<p>All reported criteria rank the models in the same order.</p>
+{% endif %}
+
+{% set lrts = dossier.get('likelihood_ratio_tests') or [] %}
+{% if lrts %}
+<h3>Nested comparisons</h3>
+<table>
+  <thead>
+    <tr><th>Restricted</th><th>Full</th><th class="n">Statistic</th>
+    <th class="n">df</th><th class="n">p</th><th>Result</th></tr>
+  </thead>
+  <tbody>
+  {% for t in lrts %}
+    <tr>
+      <td>{{ t.get('restricted') }}</td>
+      <td>{{ t.get('full') }}</td>
+      <td class="n">{{ cell(t.get('statistic') | num(2)) }}</td>
+      <td class="n">{{ cell(t.get('df') | integer) }}</td>
+      <td class="n">{{ cell(t.get('p_value') | pvalue) }}</td>
+      <td>
+        {% if t.get('performed') %}performed
+        {% else %}not performed — {{ t.get('refusal_reason') or ABSENT }}{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p>
+  A test that was not performed is a result, not a gap: it records that the
+  comparison would not have meant what it appeared to mean.
+</p>
+{% endif %}
+
+{% for note in dossier.get('notes') or [] %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
+{# ------------------------------------------------------ reference model #}
+{% set reference = ctx.diagnostics.get('reference_model') %}
+{% if reference %}
+<h2>Item-level diagnostics <span class="tag">{{ reference }}</span></h2>
+<div class="panel">
+  {{ ctx.diagnostics.get('reference_model_rationale') or ABSENT }}
+</div>
+{% endif %}
+
+{# --------------------------------------------------------- per-model #}
+{% set per_model = ctx.diagnostics.get('per_model') or {} %}
+{% for fit in ctx.fits %}
+{% set model_diag = per_model.get(fit.model_key) or {} %}
+
+<h2>{{ fit.model_key }}{% if fit.model_key == reference %} <span class="tag">reference</span>{% endif %}</h2>
+
+{% if not fit.converged %}
+<div class="flag">
+  <strong>This model did not converge.</strong>
+  {% if fit.failure_reason %}<p>{{ fit.failure_reason }}</p>{% endif %}
+  <p>
+    No parameters are reported for it and it takes part in no diagnostic below.
+    An unconverged fit has no estimates to report, only a failure to produce
+    them.
+  </p>
+</div>
+{% else %}
+
+<dl class="kv">
+  <dt>Log-likelihood</dt><dd>{{ cell(fit.log_likelihood | num(2)) }}</dd>
+  <dt>Free parameters</dt><dd>{{ cell(fit.n_free_parameters | integer) }}</dd>
+  <dt>AIC / BIC</dt>
+  <dd>{{ cell(fit.aic | num(1)) }} / {{ cell(fit.bic | num(1)) }}</dd>
+  <dt>Latent SD</dt><dd>{{ cell(fit.latent_sd | num(4)) }}</dd>
+  <dt>EM cycles</dt><dd>{{ cell(fit.n_cycles | integer) }}</dd>
+  <dt>Time to fit</dt><dd>{{ cell(fit.elapsed_seconds | duration) }}</dd>
+</dl>
+{% for note in fit.notes %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+
+{# ------------------------------------------------------- global fit #}
+{% set gf = model_diag.get('global_fit') %}
+<h3>Overall fit to the data</h3>
+{% if not gf %}
+<p>{{ absent() }} — see the failures listed above.</p>
+{% else %}
+<dl class="kv">
+  <dt>{{ gf.get('statistic_name') or 'M2' }}</dt>
+  <dd>{{ cell(gf.get('statistic') | num(2)) }}
+      on {{ cell(gf.get('df') | integer) }} df,
+      p {{ cell(gf.get('p_value') | pvalue) }}</dd>
+  <dt>RMSEA2</dt>
+  <dd>{{ cell(gf.get('rmsea2') | num(4)) }}
+      {{ interval(gf.get('rmsea2_lower'), gf.get('rmsea2_upper'), 4) }}</dd>
+  <dt>SRMSR</dt><dd>{{ cell(gf.get('srmsr') | num(4)) }}</dd>
+</dl>
+<p>
+  The p-value is a test of exact fit, and exact fit is not what an instrument
+  needs. It is sensitive to sample size in both directions: with several
+  thousand respondents it rejects models that are perfectly usable, and with a
+  few hundred it accepts models that are not. Read the RMSEA interval and SRMSR,
+  which describe how large the misfit is, rather than whether any was detected.
+</p>
+{% for note in gf.get('notes') or [] %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
+{# ------------------------------------------------------ reliability #}
+{% set rel = model_diag.get('reliability') %}
+<h3>Precision</h3>
+{% if not rel %}
+<p>{{ absent() }} — see the failures listed above.</p>
+{% else %}
+<dl class="kv">
+  <dt>Marginal reliability (Bayesian)</dt>
+  <dd>{{ cell(rel.get('marginal_bayesian') | num(3)) }}</dd>
+  <dt>Marginal reliability (information)</dt>
+  <dd>{{ cell(rel.get('marginal_information') | num(3)) }}</dd>
+  <dt>Empirical reliability</dt>
+  <dd>{{ cell(rel.get('empirical') | num(3)) }}</dd>
+  <dt>McDonald's omega</dt><dd>{{ cell(rel.get('omega') | num(3)) }}</dd>
+  <dt>Information peaks at</dt>
+  <dd>theta = {{ cell(rel.get('peak_information_at') | num(2)) }}</dd>
+</dl>
+<p>
+  Cronbach's alpha is deliberately not reported. It assumes every item
+  contributes equally, which is exactly what these models estimate to be false;
+  under a 2PL or a graded response model it does not measure what it is usually
+  read as measuring.
+</p>
+{% set bands = rel.get('bands') or [] %}
+{% if bands %}
+<p>The range of the scale over which the test measures to a given precision:</p>
+<table>
+  <thead><tr><th class="n">Standard error below</th><th class="n">From</th><th class="n">To</th><th class="n">Reliability equivalent</th></tr></thead>
+  <tbody>
+  {% for band in bands %}
+    <tr>
+      <td class="n">{{ cell(band.get('max_sem') | num(2)) }}</td>
+      <td class="n">{{ cell(band.get('lower') | num(2)) }}</td>
+      <td class="n">{{ cell(band.get('upper') | num(2)) }}</td>
+      <td class="n">{{ cell(band.get('reliability_equivalent') | num(2)) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p>
+  A single reliability figure averages precision over the whole scale. These
+  bands say where that precision actually holds, which is what matters when a
+  decision is made at a particular point on the scale rather than on average.
+</p>
+{% endif %}
+{% for note in rel.get('notes') or [] %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
+{# --------------------------------------------------------- item fit #}
+{% set itemfit = model_diag.get('item_fit') %}
+<h3>Item fit</h3>
+{% if not itemfit %}
+<p>{{ absent() }} — see the failures listed above.</p>
+{% else %}
+{% set flagged = (itemfit.get('items') or []) | selectattr('flagged') | list %}
+<p>
+  {% if flagged %}
+  <strong>{{ flagged | length }} of {{ (itemfit.get('items') or []) | length }}
+  items are flagged for review.</strong>
+  {% else %}
+  No items were flagged.
+  {% endif %}
+  A flag means the responses to an item depart from what the model predicts. It
+  is a prompt to look at the item, not a judgement that the item is bad — and
+  the reverse holds too: the conventional 0.7–1.3 mean-square band is porous in
+  one direction, because an item that discriminates far better than the model
+  allows produces unusually small residuals and can pass while genuinely
+  misfitting. S-X² is the statistic without that blind spot.
+</p>
+<table>
+  <thead>
+    <tr>
+      <th>Item</th><th class="n">S-X²</th><th class="n">df</th><th class="n">p</th>
+      <th class="n">z</th><th class="n">Infit</th><th class="n">Outfit</th>
+      <th class="n">RMSD</th><th class="n">n</th><th>Flagged</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for item in itemfit.get('items') or [] %}
+    <tr>
+      <td>{{ item.get('item_id') }}</td>
+      <td class="n">{{ cell(item.get('s_x2') | num(2)) }}</td>
+      <td class="n">{{ cell(item.get('s_x2_df') | integer) }}</td>
+      <td class="n">{{ cell(item.get('s_x2_p') | pvalue) }}</td>
+      <td class="n">{{ cell(item.get('s_x2_z') | num(2)) }}</td>
+      <td class="n">{{ cell(item.get('infit') | num(2)) }}</td>
+      <td class="n">{{ cell(item.get('outfit') | num(2)) }}</td>
+      <td class="n">{{ cell(item.get('rmsd') | num(3)) }}</td>
+      <td class="n">{{ cell(item.get('n_used') | integer) }}</td>
+      <td>{{ item.get('flagged') | yes_no }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% for note in itemfit.get('notes') or [] %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
+{# ------------------------------------------------- item parameters #}
+<h3>Item parameters</h3>
+{% if not fit.get('items') %}
+<p>{{ absent() }}</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Item</th><th class="n">Categories</th>
+      <th class="n">Discrimination (a)</th><th class="n">Difficulty (b)</th>
+      <th class="n">Guessing (c)</th><th>Thresholds</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for item in fit['items'] %}
+    <tr>
+      <td>{{ item.item_id }}</td>
+      <td class="n">{{ cell(item.n_categories | integer) }}</td>
+      <td class="n">{{ cell(estimate(item.discrimination, item.se_discrimination)) }}</td>
+      <td class="n">{{ cell(estimate(item.difficulty, item.se_difficulty)) }}</td>
+      <td class="n">{{ cell(estimate(item.guessing, item.se_guessing)) }}</td>
+      <td class="n">
+        {% if item.thresholds %}
+          {% for t in item.thresholds %}
+            {{ cell(estimate(t, item.se_thresholds[loop.index0] if item.se_thresholds | length > loop.index0 else None)) }}{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        {% else %}{{ absent() }}{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p>
+  Values are shown with their standard errors. A parameter whose standard error
+  could not be computed is still an estimate, but it is an estimate of unknown
+  precision, and it is marked as such rather than presented as a clean number.
+</p>
+{% endif %}
+{% endif %}{# converged #}
+{% endfor %}
+
+{# ------------------------------------------------------- assumptions #}
+<h2>Assumptions</h2>
+<p>
+  Every statistic above depends on these holding. They are reported after the
+  item results because that is the order people read in, and before any decision
+  because that is the order that matters: an item statistic computed under a
+  violated assumption is precise about the wrong thing.
+</p>
+
+{% set assumptions = ctx.diagnostics.get('assumptions') or {} %}
+{% set uni = assumptions.get('unidimensionality') %}
+<h3>Dimensionality</h3>
+{% if not uni %}
+<p>{{ absent() }} — see the failures listed above.</p>
+{% else %}
+<dl class="kv">
+  <dt>Factors retained (parallel analysis)</dt>
+  <dd>{{ cell(uni.get('n_factors_parallel') | integer) }}</dd>
+  <dt>Factors retained (Velicer's MAP)</dt>
+  <dd>{{ cell(uni.get('n_factors_map') | integer) }}</dd>
+  <dt>Explained common variance (ECV)</dt>
+  <dd>{{ cell(uni.get('explained_common_variance') | num(3)) }}</dd>
+  <dt>Percent uncontaminated correlations (PUC)</dt>
+  <dd>{{ cell(uni.get('percent_uncontaminated') | num(3)) }}</dd>
+  <dt>Omega hierarchical</dt>
+  <dd>{{ cell(uni.get('omega_hierarchical') | num(3)) }}</dd>
+</dl>
+<p>
+  The three procedures are reported together because they fail differently:
+  parallel analysis is sensitive to sample size, MAP under-extracts when factors
+  are thin, and the bifactor indices assume the pattern they are computed from.
+  Agreement between them is what carries weight; disagreement means the question
+  is open, not that the majority wins.
+</p>
+{% for note in uni.get('notes') or [] %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
+{% set li = assumptions.get('local_independence') %}
+<h3>Local independence</h3>
+{% if not li %}
+<p>{{ absent() }} — see the failures listed above.</p>
+{% else %}
+{% set pairs = (li.get('pairs') or []) | selectattr('flagged') | list %}
+<p>
+  {% if pairs %}
+  <strong>{{ pairs | length }} item
+  {{ 'pair' if pairs | length == 1 else 'pairs' }}</strong> share variance the
+  trait does not explain.
+  {% else %}
+  No item pairs exceeded the bootstrapped critical value.
+  {% endif %}
+  The threshold used is a bootstrapped critical value from this data, not the
+  folk cut-off of |Q3| &gt; 0.2 — on clean data that cut-off fires far too
+  readily, because Q3 carries a structural negative bias of roughly −1/(J−1)
+  that the bias-corrected Q3* removes.
+</p>
+<dl class="kv">
+  <dt>Mean Q3 (the bias being corrected)</dt><dd>{{ cell(li.get('q3_mean') | num(3)) }}</dd>
+  <dt>Bootstrapped critical value</dt>
+  <dd>{{ cell(li.get('critical_value') | num(3)) }}</dd>
+</dl>
+{% if pairs %}
+<table>
+  <thead><tr><th>Item</th><th>Item</th><th class="n">Q3*</th><th class="n">LD X²</th><th class="n">LD z</th></tr></thead>
+  <tbody>
+  {% for pair in pairs %}
+    <tr>
+      <td>{{ pair.get('item_a') }}</td>
+      <td>{{ pair.get('item_b') }}</td>
+      <td class="n">{{ cell(pair.get('q3_star') | num(3)) }}</td>
+      <td class="n">{{ cell(pair.get('ld_x2') | num(2)) }}</td>
+      <td class="n">{{ cell(pair.get('ld_signed_z') | num(2)) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% for note in li.get('notes') or [] %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
+{# --------------------------------------------------------------- DIF #}
+{% set dif = ctx.diagnostics.get('dif') %}
+{% if dif %}
+<h2>Differential item functioning</h2>
+<p>
+  An item flagged here behaves differently between groups at the same level of
+  the trait. That is a statistical finding, not a finding of bias: deciding
+  whether the difference is unfair requires knowing what the item asks, which no
+  statistic in this report can see. Reviewing flagged items is the next step;
+  removing them on this evidence alone is not.
+</p>
+{% for variable, report in dif.items() %}
+<h3>Grouped by {{ variable }}</h3>
+{% for comparison in report.get('comparisons') or [] %}
+<h4>{{ comparison.get('reference_label') }} (reference, n={{ cell(comparison.get('n_reference') | integer) }}) vs {{ comparison.get('focal_label') }} (n={{ cell(comparison.get('n_focal') | integer) }})</h4>
+<table>
+  <thead>
+    <tr>
+      <th>Item</th><th class="n">MH delta</th><th>ETS class</th>
+      <th class="n">Logistic ΔR²</th><th class="n">p (adjusted)</th><th>Flagged</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in comparison.get('items') or [] %}
+    <tr>
+      <td>{{ row.get('item_id') }}</td>
+      <td class="n">{{ cell((row.get('mantel_haenszel') or {}).get('d_dif') | num(2)) }}</td>
+      <td>{{ (row.get('mantel_haenszel') or {}).get('ets_class') or ABSENT }}</td>
+      <td class="n">{{ cell((row.get('logistic') or {}).get('total_delta_r2') | num(4)) }}</td>
+      <td class="n">{{ cell(row.get('mh_p_adjusted') | pvalue) }}</td>
+      <td>{{ row.get('flagged') | yes_no }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% for note in report.get('notes') or [] %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{# ------------------------------------------------------ person scores #}
+{% set scores = ctx.diagnostics.get('person_scores') %}
+{% if scores %}
+<h2>Score distribution</h2>
+<dl class="kv">
+  <dt>Method</dt><dd>{{ scores.get('method') or ABSENT }}</dd>
+  <dt>Respondents scored</dt><dd>{{ cell(scores.get('n_scored') | integer) }}</dd>
+  <dt>Could not be scored</dt><dd>{{ cell(scores.get('n_unscorable') | integer) }}</dd>
+  <dt>Mean (SD)</dt>
+  <dd>{{ cell(scores.get('mean') | num(3)) }} ({{ cell(scores.get('sd') | num(3)) }})</dd>
+  <dt>Range</dt>
+  <dd>{{ cell(scores.get('minimum') | num(2)) }} to {{ cell(scores.get('maximum') | num(2)) }}</dd>
+</dl>
+{% set pct = scores.get('percentiles') %}
+{% if pct %}
+<table>
+  <thead><tr>{% for p in ['5', '25', '50', '75', '95'] %}<th class="n">{{ p }}th</th>{% endfor %}</tr></thead>
+  <tbody><tr>
+  {% for p in ['5', '25', '50', '75', '95'] %}
+    <td class="n">{{ cell(pct.get(p) | num(2)) }}</td>
+  {% endfor %}
+  </tr></tbody>
+</table>
+{% endif %}
+{% if scores.get('note') %}
+<div class="note">{{ scores.get('note') }}</div>
+{% endif %}
+{% endif %}
+
+{# --------------------------------------------------- reproducibility #}
+<h2>Reproducing this analysis</h2>
+<p>
+  These values are what make the report reproducible rather than merely
+  repeatable: the same file, the same seed and the same engine version produce
+  this document again exactly.
+</p>
+<dl class="kv">
+  <dt>Run id</dt><dd>{{ ctx.reproducibility.run_id }}</dd>
+  <dt>Engine version</dt><dd>{{ ctx.reproducibility.engine_version }}</dd>
+  <dt>Random seed</dt><dd>{{ cell(ctx.reproducibility.seed | integer) }}</dd>
+  <dt>Data file</dt><dd>{{ ctx.reproducibility.dataset_filename }}</dd>
+  <dt>SHA-256 of the file</dt>
+  <dd>{{ ctx.reproducibility.dataset_checksum_sha256 }}</dd>
+  <dt>Models requested</dt>
+  <dd>{{ ctx.reproducibility.requested_models | join(', ') or ABSENT }}</dd>
+  <dt>Models fitted</dt>
+  <dd>{{ ctx.reproducibility.fitted_models | join(', ') or ABSENT }}</dd>
+  <dt>Started</dt><dd>{{ ctx.reproducibility.started_at | timestamp }}</dd>
+  <dt>Finished</dt><dd>{{ ctx.reproducibility.finished_at | timestamp }}</dd>
+</dl>
+
+<footer>
+  <p>
+    Generated {{ ctx.generated_at | timestamp }} by IRTBoss
+    {{ ctx.reproducibility.engine_version }}. Every figure above was read from
+    the stored result of run {{ ctx.reproducibility.run_id }}; nothing was
+    recomputed at render time.
+  </p>
+</footer>
+
+</main>
+</body>
+</html>

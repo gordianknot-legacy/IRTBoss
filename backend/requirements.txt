@@ -11,6 +11,7 @@ fastapi>=0.141.1
 uvicorn[standard]>=0.52.1
 python-multipart>=0.0.32          # multipart/form-data uploads
 itsdangerous>=2.2.0               # signed session tokens (see app/auth/tokens.py)
+jinja2>=3.1.6                     # report templates (see app/reports/)
 
 # --- validation ----------------------------------------------------------
 pydantic>=2.13.4

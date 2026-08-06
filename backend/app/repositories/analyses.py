@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models import (
     AnalysisRun,
+    Dataset,
     DiagnosticsBlob,
     ItemParameterRow,
     ModelFit,
@@ -59,6 +60,27 @@ class AnalysisRepository:
             .options(
                 selectinload(AnalysisRun.fits).selectinload(ModelFit.item_parameters),
                 selectinload(AnalysisRun.diagnostics),
+            )
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_for_report(self, run_id: uuid.UUID) -> AnalysisRun | None:
+        """As :meth:`get_with_results`, plus the dataset and its project.
+
+        A report needs the project's stakes level and intended use, and the
+        dataset's checksum and filename. Loading them here rather than letting
+        the template reach for them is not an optimisation: a lazy load on an
+        async session raises at attribute access, so it would surface as a 500
+        partway through rendering.
+        """
+
+        stmt = (
+            select(AnalysisRun)
+            .where(AnalysisRun.id == run_id, AnalysisRun.owner_id == self._owner.id)
+            .options(
+                selectinload(AnalysisRun.fits).selectinload(ModelFit.item_parameters),
+                selectinload(AnalysisRun.diagnostics),
+                selectinload(AnalysisRun.dataset).selectinload(Dataset.project),
             )
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()

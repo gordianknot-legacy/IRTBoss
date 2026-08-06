@@ -118,6 +118,8 @@ class MantelHaenszelResult:
     n_dropped: int
     notes: list[str] = field(default_factory=list)
 
+    JSON_PROPERTIES = ('flagged',)
+
     @property
     def flagged(self) -> bool:
         return self.ets_class in {"B", "C"}
@@ -144,6 +146,8 @@ class MantelResult:
     n_focal: int
     n_strata_used: int
     notes: list[str] = field(default_factory=list)
+
+    JSON_PROPERTIES = ('flagged',)
 
     @property
     def flagged(self) -> bool:
@@ -185,6 +189,8 @@ class LogisticDIFResult:
 
     n_used: int
     notes: list[str] = field(default_factory=list)
+
+    JSON_PROPERTIES = ('flagged',)
 
     @property
     def flagged(self) -> bool:
@@ -239,6 +245,8 @@ class DIFResult:
 
     notes: list[str] = field(default_factory=list)
 
+    JSON_PROPERTIES = ('flagged', 'flagged_by')
+
     @property
     def flagged_by(self) -> list[str]:
         """Which methods flag this item, by each method's own criterion."""
@@ -256,6 +264,8 @@ class DIFResult:
         ):
             out.append("irt_lr")
         return out
+
+    JSON_PROPERTIES = ('flagged',)
 
     @property
     def flagged(self) -> bool:
