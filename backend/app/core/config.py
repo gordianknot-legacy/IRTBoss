@@ -19,13 +19,20 @@ Two rules this module enforces rather than documents:
 Upload caps live here too: v1 read whole request bodies into RAM with no size,
 row or column bound (P5), so the limits have to be a first-class, testable
 setting rather than a constant buried in a route.
+
+A third rule joins them, for the same reason as the first: **local upload storage
+is refused in production.** A directory shared between the API and the worker
+works only while the two processes sit on one machine, and the failure when they
+do not is a run that dies with a missing file — which reads as corrupted data
+rather than as a deployment mistake. That is a thing to fail at start-up over,
+not to discover from a support request.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -66,10 +73,22 @@ class Settings(BaseSettings):
     login_window_seconds: int = 300
 
     # --- uploads ---------------------------------------------------------
-    upload_dir: Path = Path("var/uploads")
     max_upload_bytes: int = 25 * 1024 * 1024
     max_rows: int = 100_000
     max_columns: int = 1_000
+
+    # --- upload storage --------------------------------------------------
+    # See app/storage/. `local` is for development and tests and is rejected
+    # below in production. S3 credentials are *not* settings: botocore's own
+    # chain (environment, shared config, instance role) resolves them, so there
+    # is one place to look for them and one fewer secret for this file to avoid
+    # logging.
+    storage_backend: Literal["local", "s3"] = "local"
+    upload_dir: Path = Path("var/uploads")  # root for the local backend only
+    s3_bucket: str | None = None
+    s3_prefix: str = ""
+    s3_endpoint_url: str | None = None  # set for R2, B2, MinIO; omit for AWS
+    s3_region: str | None = None
 
     # --- HTTP ------------------------------------------------------------
     # `NoDecode` because pydantic-settings would otherwise insist on JSON for a
@@ -103,6 +122,21 @@ class Settings(BaseSettings):
         if self.is_production and self.secret_key.get_secret_value() == DEV_PLACEHOLDER_SECRET:
             raise ValueError(
                 "IRTBOSS_SECRET_KEY must be set to a real value in production"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _reject_unusable_storage(self) -> Settings:
+        if self.storage_backend == "s3" and not self.s3_bucket:
+            raise ValueError(
+                "IRTBOSS_S3_BUCKET must be set when IRTBOSS_STORAGE_BACKEND is 's3'"
+            )
+        if self.is_production and self.storage_backend == "local":
+            raise ValueError(
+                "local upload storage is not usable in production: the API and the "
+                "worker would have to share a filesystem, and a worker that does "
+                "not fails the run with a missing file. Set "
+                "IRTBOSS_STORAGE_BACKEND=s3 and IRTBOSS_S3_BUCKET"
             )
         return self
 

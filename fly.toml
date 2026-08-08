@@ -8,6 +8,16 @@
 #
 # Secrets are NOT set here. `fly secrets set IRTBOSS_SECRET_KEY=...` and the
 # database and Redis URLs likewise; anything in this file is committed.
+#
+# Object storage is required, not optional: the application refuses to start in
+# production on the local backend, because the API and the worker are separate
+# processes and a shared directory only works while they are on one machine. Set
+# the bucket here if it is not sensitive, and the credentials as secrets:
+#
+#   fly secrets set AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
+#
+# Those two are read by botocore, not by this application, so they carry no
+# IRTBOSS_ prefix. Add IRTBOSS_S3_ENDPOINT_URL for a non-AWS bucket (R2, B2).
 
 app = "irtboss"
 primary_region = "lhr"
@@ -17,7 +27,11 @@ primary_region = "lhr"
 
 [env]
   IRTBOSS_ENVIRONMENT = "production"
-  IRTBOSS_UPLOAD_DIR = "/data/uploads"
+  IRTBOSS_STORAGE_BACKEND = "s3"
+  # Set to the real bucket before the first deploy. A missing bucket fails at
+  # start-up rather than at the first upload.
+  IRTBOSS_S3_BUCKET = ""
+  IRTBOSS_S3_REGION = "eu-west-2"
 
 [processes]
   api = "uvicorn app.main:app --host 0.0.0.0 --port 8000"
@@ -47,14 +61,10 @@ primary_region = "lhr"
     timeout = "5s"
     path = "/api/v1/health"
 
-# Uploaded CSVs. A single volume attached to one machine is the honest limit of
-# this configuration: it works because the API and worker processes are
-# scheduled together in one region, and it stops working the moment either
-# scales past one machine. Object storage is the fix, and it is not yet built —
-# see docs/v2/DEPLOYMENT.md.
-[[mounts]]
-  source = "irtboss_data"
-  destination = "/data"
+# No volume. Uploaded CSVs go to the bucket configured above, and nothing else
+# here keeps state on disk — which is what makes the two processes independently
+# scalable. The volume this file used to declare was the one thing preventing
+# that; see docs/v2/DEPLOYMENT.md.
 
 [[vm]]
   # Estimation is CPU-bound and holds the full response matrix plus a quadrature

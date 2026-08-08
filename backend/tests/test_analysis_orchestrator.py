@@ -380,19 +380,23 @@ def test_the_worker_can_actually_call_this_orchestrator(tmp_path):
     unnoticed.
     """
     from app.repositories.analyses import fit_to_row
+    from app.storage import LocalObjectStore
     from app.workers.tasks import _analyse
 
     frame, _ = _frame(ModelKey.TWO_PL, 10, 400, seed=67)
     frame["cohort"] = ["a"] * 200 + ["b"] * 200
-    csv = tmp_path / "responses.csv"
-    frame.to_csv(csv, index=False)
+
+    # Through the store, by reference, exactly as the job does it — a path here
+    # would stop exercising the read path the worker actually uses.
+    store = LocalObjectStore(tmp_path)
+    ref = store.put("datasets/responses.csv", frame.to_csv(index=False).encode())
 
     metadata = {
         "item_columns": [c for c in frame.columns if c != "cohort"],
         "group_columns": ["cohort"],
     }
 
-    fits, diagnostics, notes = _analyse(str(csv), metadata, ["2pl"], 5)
+    fits, diagnostics, notes = _analyse(store, ref, metadata, ["2pl"], 5)
 
     assert len(fits) == 1 and fits[0].converged
     assert isinstance(diagnostics, dict) and isinstance(notes, list)

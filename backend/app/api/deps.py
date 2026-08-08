@@ -25,6 +25,7 @@ from app.repositories.analyses import AnalysisRepository
 from app.repositories.datasets import DatasetRepository
 from app.repositories.projects import ProjectRepository
 from app.repositories.users import UserRepository
+from app.storage import ObjectStore, get_object_store
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
@@ -83,6 +84,13 @@ def analysis_repository(session: SessionDep, user: CurrentUser) -> AnalysisRepos
     return AnalysisRepository(session, user)
 
 
+def object_store(settings: SettingsDep) -> ObjectStore:
+    # Wrapped rather than depended on directly, because `get_object_store` takes
+    # an optional `Settings` and FastAPI would read that as a query parameter.
+    return get_object_store(settings)
+
+
+ObjectStoreDep = Annotated[ObjectStore, Depends(object_store)]
 ProjectRepoDep = Annotated[ProjectRepository, Depends(project_repository)]
 DatasetRepoDep = Annotated[DatasetRepository, Depends(dataset_repository)]
 AnalysisRepoDep = Annotated[AnalysisRepository, Depends(analysis_repository)]

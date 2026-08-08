@@ -38,6 +38,7 @@ from app.auth.ratelimit import set_login_rate_limiter
 from app.core.config import Settings, get_settings
 from app.db.database import create_all, drop_all, set_engine
 from app.main import create_app
+from app.storage import set_object_store
 from app.workers.queue import QUEUE_NAME, set_queue
 
 TEST_PASSWORD = "correct-horse-battery-staple"
@@ -64,9 +65,15 @@ def settings(tmp_path, monkeypatch) -> Settings:
     monkeypatch.setenv("IRTBOSS_MAX_COLUMNS", "20")
     get_settings.cache_clear()
     set_login_rate_limiter(None)
+    # Cleared on the way in as well as out, so a test that installs a store
+    # override cannot leak it into the next one through a failed teardown. The
+    # default backend is local and rooted at tmp_path, so every test gets its own
+    # upload directory.
+    set_object_store(None)
     yield get_settings()
     get_settings.cache_clear()
     set_login_rate_limiter(None)
+    set_object_store(None)
 
 
 @pytest_asyncio.fixture

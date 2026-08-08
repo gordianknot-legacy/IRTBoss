@@ -35,11 +35,37 @@ variable is indistinguishable from an unrelated one.
 | `IRTBOSS_SECRET_KEY` | Signs session tokens. The development placeholder is **rejected outright** when environment is production. |
 | `IRTBOSS_DATABASE_URL` | `postgresql+asyncpg://…` |
 | `IRTBOSS_REDIS_URL` | |
-| `IRTBOSS_UPLOAD_DIR` | See the storage limitation below. |
+| `IRTBOSS_STORAGE_BACKEND` | `local` or `s3`. `local` is **rejected outright** in production; see below. |
+| `IRTBOSS_S3_BUCKET` | Required when the backend is `s3`. Missing means the process does not start. |
+| `IRTBOSS_S3_ENDPOINT_URL` | Set for a non-AWS bucket (R2, B2, MinIO). Omit for AWS. Forces path-style addressing. |
+| `IRTBOSS_S3_REGION`, `IRTBOSS_S3_PREFIX` | Region, and an optional key prefix for a shared bucket. |
+| `IRTBOSS_UPLOAD_DIR` | Root for the `local` backend only. Ignored under `s3`. |
 | `IRTBOSS_CORS_ALLOW_ORIGINS` | The deployed frontend origin. |
+
+Bucket **credentials are not application settings.** `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` — unprefixed, because botocore reads them and this
+application never does — resolve through botocore's standard chain, which also
+covers an instance role. That keeps one place to look for them and one fewer
+secret for the settings object to avoid logging.
 
 Set secrets with `fly secrets set`, never in `fly.toml` — that file is
 committed.
+
+### Upload storage is required, not optional
+
+`IRTBOSS_STORAGE_BACKEND=local` in production is a start-up failure, in the same
+class as the placeholder secret. The reason is worth stating because the
+alternative fails so badly: the API writes the CSV and the worker reads it, so on
+the local backend the two processes must share a filesystem. The moment they do
+not, the worker is handed a reference to a file its host never had and the run
+dies with a missing file — which reads as corrupted data rather than as a
+deployment mistake, and sends the reader looking at the wrong layer.
+
+What the database stores is therefore a *storage reference*, not a path:
+`local:datasets/<uuid>.csv` or `s3://<bucket>/<key>`. Both are self-describing,
+so a worker configured for one backend that meets a reference from the other
+refuses by name instead of guessing. Bare paths from before this existed are
+still readable on the local backend. See `backend/app/storage/base.py`.
 
 ### One configuration trap worth stating plainly
 
@@ -56,7 +82,9 @@ to tell them apart rather than this flag.
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Frontend on `:5173`, API on `:8000`, health at `/api/v1/health`.
+Frontend on `:5173`, API on `:8000`, health at `/api/v1/health`, MinIO console on
+`:9001`. Compose runs the `s3` backend against MinIO, so the storage path it
+exercises is the deployed one — the API and the worker share no directory.
 
 This is worth running before any deploy, because it is still the only place the
 queue is exercised for real.
@@ -81,13 +109,13 @@ the only place that happens, which is why it is worth running before a deploy.
 These are load-bearing enough to state before someone discovers them in
 production.
 
-**Uploads are on container-local disk.** The API writes the CSV and the worker
-reads it back by path. That holds only while the two share a filesystem — one
-Fly volume, processes scheduled together. It breaks silently the moment either
-process scales beyond one machine: the worker gets a path that does not exist on
-its host and the run fails with a file-not-found that looks like data
-corruption. Object storage is the fix and it is not yet built. **Do not scale
-past one machine per process until it is.**
+**No test has talked to a real S3 endpoint.** The store's round trip, reference
+handling, prefix, missing-key path and cross-backend refusal all run against
+`moto` in process, and Compose runs the same code against MinIO over the network.
+Neither reproduces credential resolution against a real provider, bucket policy,
+per-object permissions or eventual consistency. The first deployment is where
+those get exercised, so treat the first upload-and-analyse cycle after a bucket
+change as a test rather than as traffic.
 
 **Login rate limiting is in-process.** With *N* API instances the effective
 limit is *N* × `IRTBOSS_LOGIN_MAX_ATTEMPTS` per window, and a restart clears the
@@ -114,13 +142,17 @@ two together still leak.
 
 In rough order of how much damage the absence causes:
 
-1. Object storage for uploads. Everything else on this list degrades gracefully;
-   this one produces failed runs that look like corrupted data.
+1. ~~Object storage for uploads.~~ Built: `backend/app/storage/`, with the `s3`
+   backend required in production. What remains is naming a real bucket in
+   `fly.toml` and setting the credentials as secrets.
 2. A smoke test that a queued job is actually dequeued and completes against a
    real Redis. The Postgres half of this gap is now covered in CI; the queue
    half is not.
-3. A dependency lockfile. `requirements.txt` carries lower bounds only, which is
-   not good enough for a product whose central claim is reproducibility.
+3. ~~A dependency lockfile.~~ Built: `backend/requirements.lock`, hash-pinned and
+   resolved for the image's platform. The image and all three CI jobs install it
+   with `--require-hashes`, and `tests/test_lockfile.py` fails when it drifts from
+   `requirements.txt`.
 4. Redis-backed rate limiting, or an edge rate limit in front of `/auth/login`.
 5. Backups, and a restore that has actually been performed rather than
-   configured.
+   configured. Now covers the bucket as well as the database — an upload is not
+   reconstructible from the row that describes it.

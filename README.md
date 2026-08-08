@@ -138,6 +138,7 @@ backend/
     db/             SQLAlchemy models
     repositories/   owner-scoped data access
     workers/        the queue and the analysis job
+    storage/        upload storage: the reference format and its two backends
     reports/        Jinja templates and the render path
   alembic/          migrations
   tests/            including tests/validation, the mirt agreement harness
@@ -165,7 +166,7 @@ Example datasets are in `examples/sample_datasets/`.
 
 ## Project Status
 
-Early-stage. The estimation engine, the diagnostics suite, persistence, the queue, the API, auth and HTML report rendering exist and are tested. See [`PROGRESS.md`](PROGRESS.md) for what is done, and — more usefully — for the list of known gaps, which includes login rate limiting being in-process, the absence of CSRF tokens, session tokens that survive logout until their TTL expires, uploads landing on container-local disk, and PostgreSQL-specific behaviour being exercised only under Docker rather than in the test suite.
+Early-stage. The estimation engine, the diagnostics suite, persistence, the queue, the API, auth, upload object storage and HTML report rendering exist and are tested. See [`PROGRESS.md`](PROGRESS.md) for what is done, and — more usefully — for the list of known gaps, which includes login rate limiting being in-process, the absence of CSRF tokens, session tokens that survive logout until their TTL expires, no automated test having seen a real RQ worker dequeue a real job, and no test having talked to a real S3 endpoint.
 
 We are especially interested in:
 - research collaborators

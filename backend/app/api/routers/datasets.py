@@ -10,12 +10,14 @@ not a usable response matrix.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.api.deps import (
     DatasetRepoDep,
+    ObjectStoreDep,
     ProjectRepoDep,
     SessionDep,
     SettingsDep,
@@ -23,6 +25,9 @@ from app.api.deps import (
 )
 from app.api.ingest import InvalidUpload, UploadTooLarge, ingest_csv
 from app.api.schemas import DatasetOut
+from app.storage import StorageError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["datasets"])
 
@@ -36,6 +41,7 @@ async def upload_dataset(
     project_id: uuid.UUID,
     settings: SettingsDep,
     session: SessionDep,
+    store: ObjectStoreDep,
     projects: ProjectRepoDep,
     datasets: DatasetRepoDep,
     file: UploadFile = File(...),
@@ -59,7 +65,7 @@ async def upload_dataset(
     try:
         parsed = await ingest_csv(
             file,
-            upload_dir=settings.upload_dir,
+            store=store,
             max_bytes=settings.max_upload_bytes,
             max_rows=settings.max_rows,
             max_columns=settings.max_columns,
@@ -76,6 +82,15 @@ async def upload_dataset(
         # from a third-party library (P5's raw-exception leak).
         raise HTTPException(
             status_code=422, detail=str(exc)
+        ) from None
+    except StorageError:
+        logger.exception("upload storage rejected a dataset for project %s", project_id)
+        # The bytes were fine and the store was not. 503 rather than 500 for the
+        # same reason the analyses route uses it for an unreachable queue: the
+        # request is worth retrying, and nothing was written. The underlying
+        # message stays in the log — it names a bucket.
+        raise HTTPException(
+            status_code=503, detail="Upload storage is unavailable"
         ) from None
 
     dataset = await datasets.create(

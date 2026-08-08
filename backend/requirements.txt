@@ -1,10 +1,12 @@
 # IRTBoss backend requirements — Python 3.12
 #
-# Lower bounds are the versions this tree was developed and tested against
-# (`pip list` on 2026-08-05). ARCHITECTURE §6 calls for a real lockfile before
-# deployment: unbounded ranges are not acceptable in a product that sells
-# reproducibility (P5), and this file is the input to that lock, not a
-# substitute for it.
+# Lower bounds, stating what each dependency is here for. This file is the
+# *input* to the lock, not the thing anything deploys from: `requirements.lock`
+# holds the resolved, hash-pinned set and is what the image and CI install. Edit
+# this file, then regenerate the lock with the command in its header.
+#
+# `tests/test_lockfile.py` fails if the two disagree, so a bound raised here
+# without a recompile does not reach the default branch.
 
 # --- web -----------------------------------------------------------------
 fastapi>=0.141.1
@@ -31,6 +33,9 @@ greenlet>=3.5.4                   # required by SQLAlchemy's async bridge
 rq>=2.10.0
 redis>=8.1.0
 
+# --- upload storage ------------------------------------------------------
+boto3>=1.43.67                    # S3-compatible object storage (app/storage/s3.py)
+
 # --- numerics (app/irt, app/psychometrics) -------------------------------
 numpy>=2.5.1
 scipy>=1.18.0
@@ -39,7 +44,12 @@ pandas>=3.0.5
 # --- development / test --------------------------------------------------
 pytest>=9.1.1
 pytest-asyncio>=1.4.0
+pytest-xdist>=3.8.0               # `-n auto` in CI; locked rather than installed
+                                  # alongside the lock, which --require-hashes
+                                  # would refuse
 httpx>=0.28.1                     # ASGI transport for API tests
 aiosqlite>=0.22.1                 # test database; JSONB degrades to JSON
 fakeredis>=2.37.0                 # queue assertions without a Redis server
+moto[s3]>=5.2.2                   # in-process S3; see app/storage/s3.py on what
+                                  # it does and does not verify
 ruff>=0.16.1

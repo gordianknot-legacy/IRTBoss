@@ -8,6 +8,7 @@ document it returns is complete rather than a page of missing sections.
 
 from __future__ import annotations
 
+import io
 import uuid
 
 import pandas as pd
@@ -18,6 +19,7 @@ from app.irt import ModelKey
 from app.irt.simulate import simulate, spread_parameters
 from app.reports import ABSENT
 from app.repositories.analyses import SystemRunAccess, fit_to_row
+from app.storage import get_object_store
 from tests.conftest import auth, register
 
 
@@ -84,7 +86,9 @@ async def _complete(run_id: str) -> None:
     async with get_sessionmaker()() as session:
         access = SystemRunAccess(session)
         run = await access.get(uuid.UUID(run_id))
-        frame = pd.read_csv(run.dataset.storage_ref)
+        # Resolved through the store, exactly as the worker does it — the
+        # reference is not a path any more.
+        frame = pd.read_csv(io.BytesIO(get_object_store().get(run.dataset.storage_ref)))
         items = run.dataset.column_metadata.get("item_columns") or list(frame.columns)
         result = run_analysis(frame[items], ["2pl"], seed=run.seed)
         await access.store_success(

@@ -50,6 +50,17 @@ The v1 estimation stack — the R subprocess wrapper, its fabrication path, and 
 - Analyses: the run row is committed as QUEUED before the job reaches Redis, so a dead queue leaves a visible stuck run and a 503 rather than a client holding an id for a row that was never written. There is a test asserting the enqueue happens — the specific thing v1 lacked.
 - CORS is an explicit allowlist; a wildcard is rejected by a validator. Unhandled exceptions return a generic 500 body.
 
+**Upload storage** (`backend/app/storage/`)
+- Two backends behind one interface: a filesystem one for development and tests, and an S3-compatible one that works against AWS, R2, B2 or MinIO by `endpoint_url`
+- What the database records is a storage reference — `local:datasets/<uuid>.csv` or `s3://<bucket>/<key>` — not a path, so the worker needs no filesystem in common with the API. A reference from the other backend is refused by name rather than resolved into a missing file
+- Local storage is rejected outright in production, in the same class as the placeholder secret
+- Credentials resolve through botocore's own chain and are not application settings
+- Docker Compose runs the S3 backend against MinIO, so the path a deployment uses is the path a local run exercises. The API and worker no longer share a volume, and the Fly volume is gone
+
+**Dependency lock** (`backend/requirements.lock`)
+- Hash-pinned, resolved for the image's platform, installed with `--require-hashes` by the image and by all three CI jobs
+- `tests/test_lockfile.py` fails when a bound in `requirements.txt` is not satisfied by the pin. It does not re-resolve, so an upstream release cannot redden an unrelated build
+
 **Worker** (`backend/app/workers/`)
 - RQ job that re-reads the stored CSV by its storage reference and overwrites the run's results, so re-running is safe
 - A failed run is stored as FAILED with a reason, never as a succeeded run carrying partial results
@@ -60,7 +71,7 @@ The v1 estimation stack — the R subprocess wrapper, its fabrication path, and 
 - Formatting whose one job is that absence must not look like a value: an uncomputed statistic renders as an explicit marker, small p-values render as a bound, an interval with one missing endpoint is refused
 - Owner-scoped, and a run that did not succeed returns 409 rather than a document of absent numbers laid out as findings
 
-**Frontend** (`frontend/`) — present in the working tree, not yet committed
+**Frontend** (`frontend/`)
 - React 18 + TypeScript + Vite, TanStack Query for all server state, React Router with an auth guard
 - Result sections for the sample, the comparison dossier, per-model diagnostics, assumptions, DIF, person scores, reproducibility and diagnostic failures
 - A shared component for rendering absence, with tests
@@ -79,8 +90,11 @@ These are real and none of them are hidden in the code. They belong here rather 
 - Registration returns 409 on a duplicate address, which discloses that the address is registered. Login does not.
 
 **Deployment**
-- Uploads land on container-local disk. The API and the worker share a volume in Docker Compose, which is exactly the coupling that stops working once they run on different hosts. This has to become object storage before a multi-process deploy, not after.
-- `requirements.txt` still uses lower bounds. It is the input to a lockfile, not a substitute for one, and the lockfile does not exist yet.
+- No test has talked to a real S3 endpoint. The store is covered by `moto` in process, and Compose runs the same code against MinIO over the network; neither reproduces credential resolution against a real provider, bucket policy, per-object permissions or eventual consistency.
+- The Compose and Fly changes that go with object storage — the MinIO service, the bucket-creation step, the removed shared volume, the removed Fly mount — **have not been run.** There is no Docker on this machine. They are verified by parsing and by reading, not by observation.
+- `fly.toml` carries an empty `IRTBOSS_S3_BUCKET`. That is deliberate: it documents the variable and fails at start-up rather than at the first upload. A real bucket name and the credential secrets are still to be set.
+- The lockfile covers test and lint dependencies as well as runtime ones, because `requirements.txt` does, so the production image carries pytest and moto. Splitting the two is worth doing and has not been done.
+- The lockfile is resolved for Linux on Python 3.12 and does not install on Windows or macOS — `uvloop` alone will not build there. Local development installs `requirements.txt`.
 
 **Testing**
 - The suite runs against SQLite and `fakeredis` by default. PostgreSQL specifics — JSONB, native `uuid`, `ON DELETE CASCADE`, the CHECK-constraint enums — are now covered by a CI job that points the same application tests at a real PostgreSQL service via `IRTBOSS_TEST_DATABASE_URL`, and that job also applies and reverses the Alembic migration so a migration that drifts from the models is caught. That job has not yet run on this machine: there is no PostgreSQL or Docker here, so it is verified by construction rather than by observation.
@@ -106,6 +120,7 @@ These are real and none of them are hidden in the code. They belong here rather 
 4. **One implementation per quantity.** The API computes nothing on read; it serves what the worker persisted.
 5. **The latent standard deviation travels.** Passing the 1.0 default for a Rasch or PCM fit puts every moment on a different metric from the parameters, and the output looks plausible while being wrong. There is a test that asserts on the call arguments for exactly that reason.
 6. **Enums persist their values, not their member names**, so the database and the wire format cannot diverge.
+7. **A storage reference, not a path.** `local:…` and `s3://…` are self-describing, so a process handed a reference from a backend it is not configured for says so. The alternative — a bare path — fails on the wrong layer: the run dies with a missing file, which reads as corrupted data rather than as a deployment mistake. See `backend/app/storage/base.py`.
 
 ---
 

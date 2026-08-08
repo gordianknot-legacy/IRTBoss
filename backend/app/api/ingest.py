@@ -17,8 +17,10 @@ here:
    inferred, and cheerfully fitted a respondent-id column as an item (P2).
 
 The parsed matrix is not returned to the caller: this module's job is to accept
-bytes safely, record their shape and checksum, and hand the worker a file it can
-re-read deterministically.
+bytes safely, record their shape and checksum, and hand the worker a reference it
+can re-read deterministically. The bytes go to an :class:`~app.storage.ObjectStore`
+rather than to a path, so the worker does not need to be on the same filesystem —
+see :mod:`app.storage.base` for why the path version had to go.
 """
 
 from __future__ import annotations
@@ -28,10 +30,15 @@ import hashlib
 import io
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
 
 import pandas as pd
 from fastapi import UploadFile
+
+from app.storage import ObjectStore
+
+# All dataset objects live under one prefix, so a bucket shared with anything
+# else stays legible and a lifecycle rule can address them as a group.
+_KEY_PREFIX = "datasets"
 
 # Read in 1 MiB slices. Large enough that the syscall overhead is irrelevant,
 # small enough that the overshoot past the cap before detection is bounded.
@@ -132,15 +139,10 @@ def _parse(
     return frame, metadata
 
 
-def _write(path: Path, raw: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(raw)
-
-
 async def ingest_csv(
     upload: UploadFile,
     *,
-    upload_dir: Path,
+    store: ObjectStore,
     max_bytes: int,
     max_rows: int,
     max_columns: int,
@@ -160,11 +162,13 @@ async def ingest_csv(
     )
     checksum = await asyncio.to_thread(lambda: hashlib.sha256(raw).hexdigest())
 
-    # Name the stored file by a fresh UUID, never by the client's filename.
+    # Name the stored object by a fresh UUID, never by the client's filename.
     # The original name is metadata; using it as a path is how directory
     # traversal gets in.
-    storage_path = Path(upload_dir) / f"{uuid.uuid4()}.csv"
-    await asyncio.to_thread(_write, storage_path, raw)
+    key = f"{_KEY_PREFIX}/{uuid.uuid4()}.csv"
+    # `put` is blocking on both backends — a disk write on one, an HTTP request
+    # on the other — so it goes off the event loop like the parse and the hash.
+    storage_ref = await asyncio.to_thread(store.put, key, raw)
 
     return ParsedUpload(
         checksum_sha256=checksum,
@@ -172,5 +176,5 @@ async def ingest_csv(
         n_persons=int(frame.shape[0]),
         n_items=len(metadata["item_columns"]),
         column_metadata=metadata,
-        storage_ref=str(storage_path),
+        storage_ref=storage_ref,
     )

@@ -20,16 +20,22 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Dependencies first, so a code change does not reinstall scipy.
-COPY backend/requirements.txt ./requirements.txt
-RUN pip install --upgrade pip && pip install -r requirements.txt
+#
+# From the lock, with --require-hashes: two builds of the same commit contain the
+# same code, which is the minimum a product that stamps an engine version on
+# every result has to be able to claim. requirements.txt is copied alongside it
+# for provenance — nothing installs from it here.
+COPY backend/requirements.txt backend/requirements.lock ./
+RUN pip install --upgrade pip && pip install --require-hashes -r requirements.lock
 
 COPY backend/app ./app
 COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./alembic.ini
 
-# Uploads live here when object storage is not configured. See the note in
-# docs/v2/DEPLOYMENT.md: container-local disk only works while the API and the
-# worker share a filesystem, which is not true of a multi-host deploy.
+# The local storage backend writes here. It is a development convenience only —
+# production configuration is refused on it, because a directory shared between
+# the API and the worker only works while the two are on one machine. Compose
+# runs against MinIO, so nothing in a normal run writes to this directory.
 RUN mkdir -p /app/var/uploads
 
 RUN useradd --create-home --uid 1000 irtboss && chown -R irtboss:irtboss /app

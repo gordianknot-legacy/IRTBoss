@@ -45,13 +45,58 @@ async def test_cors_response_echoes_only_allowed_origins(client, settings):
     assert "access-control-allow-origin" not in denied.headers
 
 
+# The minimum a production configuration needs beyond a secret. Named here
+# because two tests below would otherwise fail for a reason unrelated to what
+# they are testing.
+_PRODUCTION_STORAGE = {"storage_backend": "s3", "s3_bucket": "irtboss-uploads"}
+
+
 def test_production_refuses_the_placeholder_secret():
     with pytest.raises(ValueError, match="SECRET_KEY"):
-        Settings(environment="production", secret_key=DEV_PLACEHOLDER_SECRET)
+        Settings(
+            environment="production",
+            secret_key=DEV_PLACEHOLDER_SECRET,
+            **_PRODUCTION_STORAGE,
+        )
 
     # A real secret in production is fine.
-    ok = Settings(environment="production", secret_key="a-real-deployment-secret-value")
+    ok = Settings(
+        environment="production",
+        secret_key="a-real-deployment-secret-value",
+        **_PRODUCTION_STORAGE,
+    )
     assert ok.is_production
+
+
+def test_production_refuses_local_upload_storage():
+    """The API and the worker cannot be assumed to share a filesystem.
+
+    A local upload directory in production produces a run that dies on a missing
+    file, which reads as corrupted data rather than as a misconfiguration. It is
+    therefore a start-up failure, in the same class as the placeholder secret.
+    """
+
+    with pytest.raises(ValueError, match="STORAGE_BACKEND"):
+        Settings(
+            environment="production",
+            secret_key="a-real-deployment-secret-value",
+            storage_backend="local",
+        )
+
+
+def test_s3_storage_requires_a_bucket():
+    with pytest.raises(ValueError, match="S3_BUCKET"):
+        Settings(storage_backend="s3")
+
+    ok = Settings(storage_backend="s3", s3_bucket="irtboss-uploads")
+    assert ok.s3_bucket == "irtboss-uploads"
+
+
+def test_an_unknown_storage_backend_is_rejected():
+    # `local` and `s3` are the two that exist. A typo must not fall through to a
+    # default that silently writes somewhere else.
+    with pytest.raises(ValueError):
+        Settings(storage_backend="gcs")
 
 
 def test_secret_key_is_not_printable():

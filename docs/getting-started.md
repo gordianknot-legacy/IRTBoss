@@ -17,13 +17,14 @@ This guide gets the stack running and walks one dataset through to a report.
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-This brings up PostgreSQL, Redis, a migration container that runs `alembic upgrade head` to completion, the API, the RQ worker and the frontend dev server. The API and the worker wait on the migration, so neither can start against a schema that does not match the code.
+This brings up PostgreSQL, Redis, MinIO and a container that creates the uploads bucket, a migration container that runs `alembic upgrade head` to completion, the API, the RQ worker and the frontend dev server. The API and the worker wait on the migration and on the bucket, so neither can start against a schema that does not match the code or a bucket that does not exist.
 
 - API: `http://localhost:8000`, versioned under `/api/v1`
 - Interactive schema: `http://localhost:8000/docs`
 - Frontend: `http://localhost:5173`
+- MinIO console: `http://localhost:9001` (`irtboss` / `irtboss_dev_secret`)
 
-Compose is also the only way to exercise the parts of the system the test suite cannot reach on a developer machine: the tests run against SQLite and a fake Redis, so PostgreSQL-specific behaviour and a real worker dequeuing a real job are only covered here.
+Compose is also the only way to exercise the parts of the system the test suite cannot reach on a developer machine: the tests run against SQLite and a fake Redis, so PostgreSQL-specific behaviour and a real worker dequeuing a real job are only covered here. Object storage is covered by the tests in process, against `moto`; MinIO is where the same code runs over the network.
 
 ### Locally
 
@@ -33,6 +34,8 @@ source venv/bin/activate          # Windows: venv\Scripts\activate
 cd backend
 pip install -r requirements.txt
 ```
+
+`requirements.txt`, not `requirements.lock`: the lock is resolved for the image's platform and will not install on Windows or macOS. The image and CI install the lock; local development installs the bounds.
 
 Point the application at your database and Redis. Every setting is read with the `IRTBOSS_` prefix and is declared in `backend/app/core/config.py`:
 
