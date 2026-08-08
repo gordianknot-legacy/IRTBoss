@@ -76,6 +76,12 @@ The v1 estimation stack — the R subprocess wrapper, its fabrication path, and 
 - Result sections for the sample, the comparison dossier, per-model diagnostics, assumptions, DIF, person scores, reproducibility and diagnostic failures
 - A shared component for rendering absence, with tests
 
+**Explainer series** (`docs/explainers/`)
+- Twelve self-contained HTML chapters plus an index, taking a reader from "what is wrong with a total score" to the primary literature: history, the seven models, the Bock–Aitkin derivation, scoring and precision, fit and assumptions, DIF, the comparison dossier, applications, the software architecture, a worked example, and a glossary with references
+- Part 11 narrates an actual run of `run_analysis()` — 400×12, 2PL and Rasch, seed 20260803 — and every number in it is from the real output, including an indistinguishability verdict alongside a significant LRT and three DIF false positives that die under Benjamini–Hochberg, each used as a teaching case
+- Three reading tracks (Stakeholder, Analyst, Maintainer) marked per chapter; inline SVG diagrams; one shared stylesheet, light and dark
+- These teach; they do not supersede `docs/irt-basics.md`, `docs/modeling-decisions.md` or the v2 reference documents, and the index says how they relate
+
 ---
 
 ## Known gaps
@@ -131,3 +137,4 @@ These are real and none of them are hidden in the code. They belong here rather 
 - [`docs/v2/PROBLEMS.md`](docs/v2/PROBLEMS.md) — the audit of the v1 baseline, with file and line evidence
 - [`docs/v2/ARCHITECTURE.md`](docs/v2/ARCHITECTURE.md) — the target design and the decisions behind it
 - [`docs/v2/DEPLOYMENT.md`](docs/v2/DEPLOYMENT.md) — deployment topology and operational notes
+- [`docs/explainers/index.html`](docs/explainers/index.html) — the twelve-part beginner-to-expert explainer series
