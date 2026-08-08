@@ -112,7 +112,12 @@ services:
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     ports: ["5173:5173"]
     environment:
-      VITE_API_URL: http://localhost:8000/api/v1
+      # Where the dev server's /api proxy sends requests. It must name the api
+      # *service*, because the proxy runs in this container and its own loopback
+      # has nothing on port 8000. This replaces a VITE_API_URL that no line of
+      # frontend code ever read — the client uses a relative /api/v1 and relies
+      # entirely on the proxy, so the browser could not reach the API at all.
+      VITE_PROXY_TARGET: http://api:8000
     volumes:
       - ../frontend:/app
       - frontend-modules:/app/node_modules
