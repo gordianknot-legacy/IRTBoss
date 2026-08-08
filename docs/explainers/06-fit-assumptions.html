@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 6 · Does the model actually describe the data?</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 6 of 12</p>
+  <h1>Does the model actually describe the data?</h1>
+  <ul class="tracks">
+    <li class="track track-user">Analyst</li>
+  </ul>
+  <p class="lede">Parts 4 and 5 assumed the model was right. This part is about earning that assumption — item by item, for the test as a whole, and for the two structural claims everything rests on.</p>
+</header>
+
+<h2>The problem with “is it significant?”</h2>
+
+<p>Before any statistic, one point that governs how all of them should be read. Fit statistics are tests of a null hypothesis that the model holds <em>exactly</em>. No model holds exactly. So with a large enough sample, every fit test rejects, and with a small enough sample, none of them do.</p>
+
+<p>In this domain samples of several thousand are ordinary, which means the sentence “item 7 shows significant misfit (<var>p</var> &lt; .001)” can be true of an item whose curve is off by two percentage points — a departure with no practical consequence. Conversely, at <var>N</var> = 200 a badly broken item can pass.</p>
+
+<p>IRTBoss therefore <strong>does not present fit as pass or fail</strong>. It reports effect sizes alongside <var>p</var>-values, ranks items by effect size, and states the sample size beside every <var>p</var>-value so the reader can calibrate. That policy is stated in the module docstring of <code>itemfit.py</code>, and it is the single most important thing to carry into your own reporting.</p>
+
+<h2>Item fit: three statistics, each blind to something</h2>
+
+<h3>S-X² — the one to trust</h3>
+
+<p>The idea: group respondents by how they scored on <em>every other item</em> — the <strong>rest score</strong> — then, within each group, compare the observed proportion who got item <var>j</var> right with what the model predicts. If the model describes item <var>j</var>, those should match at every rest-score level.</p>
+
+<div class="eq">
+S-X²<sub><var>j</var></sub> <span class="op">=</span> <span style="font-size:1.3em">∑</span><sub><var>s</var></sub> <var>N<sub>s</sub></var> (<var>O<sub>js</sub></var> <span class="op">−</span> <var>E<sub>js</sub></var>)² <span class="op">/</span> [ <var>E<sub>js</sub></var> (1 <span class="op">−</span> <var>E<sub>js</sub></var>) ]
+<span class="tag">(1)</span>
+</div>
+
+<p>where <var>N<sub>s</sub></var> is the number of respondents with rest score <var>s</var>, <var>O<sub>js</sub></var> their observed proportion correct on item <var>j</var>, and <var>E<sub>js</sub></var> the model-expected proportion. Degrees of freedom are the number of rest-score groups (after collapsing sparse ones) minus the number of parameters for that item.</p>
+
+<p>Why the rest score rather than estimated ability? Because conditioning on an <em>estimated</em> <var>θ</var> means the conditioning variable carries the estimation error of the very model being tested. The resulting statistic capitalises on that error and its null distribution is not the chi-square it is compared against. Orlando &amp; Thissen’s contribution was to condition on something observed instead. That makes S-X² a genuine chi-square, and it is why the code says: this is the statistic to trust when the three disagree.</p>
+
+<div class="box box-math">
+<h4>The Lord–Wingersky recursion: how <var>E<sub>js</sub></var> is computed</h4>
+<p>Getting the model-expected proportion needs the distribution of the rest score under the model — the probability that a person at ability <var>θ</var> scores exactly <var>s</var> on the other items. There are combinatorially many ways to reach a given total, so it is computed by recursion (Lord &amp; Wingersky, 1984).</p>
+<p>Let <var>f<sub>t</sub></var>(<var>s</var> <span class="op">|</span> <var>θ</var>) be the probability of total <var>s</var> after including the first <var>t</var> items. Start with certainty at zero:</p>
+<div class="eq eq-left"><var>f</var><sub>0</sub>(0) <span class="op">=</span> 1</div>
+<p>Then add one item at a time. For dichotomous items:</p>
+<div class="eq eq-left">
+<var>f<sub>t</sub></var>(<var>s</var>) <span class="op">=</span> <var>f</var><sub><var>t</var>−1</sub>(<var>s</var>) <span class="op">·</span> (1 <span class="op">−</span> <var>P<sub>t</sub></var>(<var>θ</var>)) <span class="op">+</span> <var>f</var><sub><var>t</var>−1</sub>(<var>s</var> <span class="op">−</span> 1) <span class="op">·</span> <var>P<sub>t</sub></var>(<var>θ</var>)
+<span class="tag">(2)</span>
+</div>
+<p>In words: to have total <var>s</var> after <var>t</var> items you either had <var>s</var> and got this one wrong, or had <var>s</var>−1 and got it right. For polytomous items the recursion sums over categories, shifting by the category score. The cost is linear in items and in the score range, rather than exponential.</p>
+<p>With the rest-score distribution in hand, the expected proportion correct at rest score <var>s</var> is obtained by integrating over <var>θ</var>, weighting by how likely each ability is given that rest score. This is why S-X² is more expensive than the residual-based statistics below, and why it is worth it.</p>
+</div>
+
+<h3>Infit and outfit — the Rasch tradition’s residuals</h3>
+
+<p>Define the standardised residual for one response:</p>
+
+<div class="eq">
+<var>z<sub>ij</sub></var> <span class="op">=</span> (<var>x<sub>ij</sub></var> <span class="op">−</span> <var>E<sub>ij</sub></var>) <span class="op">/</span> √<var>W<sub>ij</sub></var>,
+<span style="padding-left:1em"><var>W<sub>ij</sub></var> <span class="op">=</span> Var(<var>x<sub>ij</sub></var> <span class="op">|</span> <var>θ<sub>i</sub></var>)</span>
+<span class="tag">(3)</span>
+</div>
+
+<p>Then two mean-square summaries:</p>
+
+<div class="eq eq-left">
+outfit<sub><var>j</var></sub> <span class="op">=</span> (1<span class="op">/</span><var>N</var>) <span style="font-size:1.2em">∑</span><sub><var>i</var></sub> <var>z<sub>ij</sub></var>²
+<span style="padding-left:2em">
+infit<sub><var>j</var></sub> <span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>i</var></sub> (<var>x<sub>ij</sub></var> <span class="op">−</span> <var>E<sub>ij</sub></var>)² <span class="op">/</span> <span style="font-size:1.2em">∑</span><sub><var>i</var></sub> <var>W<sub>ij</sub></var>
+</span>
+<span class="tag">(4)</span>
+</div>
+
+<p>Both have an expected value of 1 under perfect fit. The difference is weighting. <strong>Outfit</strong> is unweighted, so a single wildly improbable response — a very able person missing a very easy item — dominates it. <strong>Infit</strong> weights by information, so it is driven by responses near the item’s difficulty, where the item is actually doing its work.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Value</th><th>Name</th><th>Meaning</th><th>What to do</th></tr></thead>
+<tbody>
+<tr><td>&gt; 1.3 (roughly)</td><td>Underfit</td><td>More noise than the model expects: the item behaves erratically, or measures something else</td><td>The serious direction. Inspect content, check for miskeying, consider removal</td></tr>
+<tr><td>≈ 1.0</td><td>Fit</td><td>Residual variation as predicted</td><td>Nothing</td></tr>
+<tr><td>&lt; 0.7 (roughly)</td><td>Overfit</td><td>Too predictable: often a near-duplicate of another item, or dependent on it</td><td>Less alarming for scoring, but it inflates reliability — see local independence below</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><strong>IRTBoss reports these as effect sizes only.</strong> The familiar <var>t</var>-transformations are deliberately omitted: their null distribution depends on sample size so strongly that with a few thousand respondents nearly every item is “significantly” misfitting, which tells the reader nothing about the item. Note also that the thresholds above are conventions from the Rasch literature, not derived cut-offs.</p>
+
+<h3>RMSD — how wrong, not how confident</h3>
+
+<p>The root-mean-square deviation between the observed and expected category response curves, on the probability scale:</p>
+
+<div class="eq">
+RMSD<sub><var>j</var></sub> <span class="op">=</span> √( ∫ [ <var>O<sub>j</sub></var>(<var>θ</var>) <span class="op">−</span> <var>E<sub>j</sub></var>(<var>θ</var>) ]² <var>w</var>(<var>θ</var>) d<var>θ</var> )
+<span class="tag">(5)</span>
+</div>
+
+<p>Its virtue is that, unlike (1) and (4), it <strong>does not grow with sample size</strong>. It answers “how wrong is this item?” rather than “how confident are we that it is wrong at all?”. Being on the probability scale, it is directly interpretable: an RMSD of 0.03 means the curve is off by about three percentage points on average. This is the statistic to quote to a non-specialist audience, and the one to use when deciding whether misfit matters operationally.</p>
+
+<h2>Global fit: does the model describe the test?</h2>
+
+<p>Item fit can pass everywhere while the model still misdescribes the joint structure. The natural global test — Pearson X² or the likelihood-ratio G² over the full contingency table of response patterns — is unusable, and it is worth being precise about why.</p>
+
+<p>With 20 binary items there are 2<sup>20</sup> ≈ one million possible patterns. With a few thousand respondents, essentially every cell is empty or holds one person. The asymptotic chi-square approximation requires expected counts that are not tiny, so it does not merely lose precision here — it is wrong in a direction nobody can predict.</p>
+
+<h3>M2: test only the low-order margins</h3>
+
+<p>Maydeu-Olivares and Joe’s insight: do not test the full table. Test the <strong>univariate proportions and the bivariate cross-products</strong> only. Those are estimated from the whole sample rather than from a sparse cell, so their sampling distribution is well behaved at realistic <var>N</var>.</p>
+
+<p>Let <b>e</b> be the vector of residual moments — observed minus model-implied univariate and bivariate moments. The statistic is a quadratic form:</p>
+
+<div class="eq">
+M2 <span class="op">=</span> <var>N</var> <span class="op">·</span> <b>e</b>′ <b>C</b><sub>2</sub> <b>e</b>,
+<span style="padding-left:1.5em"><b>C</b><sub>2</sub> <span class="op">=</span> <b>Ξ</b><sup>−1</sup> <span class="op">−</span> <b>Ξ</b><sup>−1</sup><b>Δ</b>(<b>Δ</b>′<b>Ξ</b><sup>−1</sup><b>Δ</b>)<sup>−1</sup><b>Δ</b>′<b>Ξ</b><sup>−1</sup></span>
+<span class="tag">(6)</span>
+</div>
+
+<p>where <b>Δ</b> is the Jacobian of the model-implied moments with respect to the free parameters, and <b>Ξ</b> is the asymptotic covariance matrix of the moments. Under the fitted model, M2 is asymptotically chi-square with</p>
+
+<div class="eq">
+df <span class="op">=</span> <var>s</var> <span class="op">−</span> <var>q</var>
+<span style="padding-left:1em">(number of moments <span class="op">−</span> number of free parameters)</span>
+<span class="tag">(7)</span>
+</div>
+
+<p>The middle term of <b>C</b><sub>2</sub> is a projection that removes the directions in which the model could have adjusted its parameters to fit the moments — you should not be credited for residuals you had the freedom to eliminate.</p>
+
+<div class="box box-code">
+<h4>An implementation choice with a real consequence — <code>globalfit.py</code></h4>
+<p>IRTBoss computes <b>C</b><sub>2</sub> in its <strong>orthogonal-complement form</strong>, <b>Δ</b><sub>c</sub>(<b>Δ</b><sub>c</sub>′<b>Ξ</b><b>Δ</b><sub>c</sub>)<sup>−1</sup><b>Δ</b><sub>c</sub>′, where <b>Δ</b><sub>c</sub> spans the null space of <b>Δ</b>′. This is algebraically identical to (6) but <strong>never inverts the full <var>s</var>×<var>s</var> matrix <b>Ξ</b></strong> — which, for a long polytomous test, is the ill-conditioned matrix in the expression. Same statistic, far better numerical behaviour. This is the kind of decision worth knowing about: two mathematically equal formulas can differ entirely in whether the answer you get is the answer you wanted.</p>
+<p>For polytomous items the tool computes <strong>M2*</strong> (Cai &amp; Hansen, 2013), building moments from the cumulative dichotomisations 1[<var>X<sub>j</sub></var> ≥ <var>c</var>] rather than from category indicators. For binary items every cut is <var>c</var> = 1 and M2* reduces exactly to M2, so one implementation serves both — and the reported name says which one you got.</p>
+</div>
+
+<h3>RMSEA2 and SRMSR: effect sizes for global fit</h3>
+
+<p>Because M2 is still a significance test, it needs effect-size companions.</p>
+
+<div class="eq">
+RMSEA2 <span class="op">=</span> √( max(0, M2 <span class="op">−</span> df) <span class="op">/</span> [ df <span class="op">·</span> (<var>N</var> <span class="op">−</span> 1) ] )
+<span class="tag">(8)</span>
+</div>
+
+<p>This is the familiar RMSEA computed from M2 rather than from a full-information chi-square. The <code>max(0, ·)</code> matters: when M2 falls below its degrees of freedom the model fits better than chance expectation, and RMSEA is defined as zero rather than as the square root of a negative number. IRTBoss reports it with a <strong>Steiger confidence interval</strong>, obtained by inverting the non-central chi-square distribution — the interval, not the point estimate, is what should drive a decision.</p>
+
+<p><strong>SRMSR</strong> is the standardised root-mean-square residual of the bivariate correlations: the average discrepancy between observed and model-implied item correlations. It is on a correlation scale, so it is interpretable directly and does not depend on <var>N</var>.</p>
+
+<div class="box box-warn">
+<h4>The power limitation you must not forget</h4>
+<p>M2 has <strong>modest power against 3PL guessing</strong>. A 2PL absorbs the univariate margins almost exactly, so a genuine lower asymptote leaves little trace in the moments M2 examines. This project’s own documentation puts numbers on it: detecting a real <var>c</var> = 0.35 reliably needs roughly 25 items and <var>N</var> = 4,000. Below that, <strong>a non-significant M2 on a 2PL fit is not evidence that guessing is absent.</strong> Conventional RMSEA thresholds borrowed from structural equation modelling should also be treated with suspicion here; the literature on fit indices under categorical estimation (see Part 12) shows they do not transfer cleanly.</p>
+</div>
+
+<h2>Assumption one: unidimensionality</h2>
+
+<p>Fitting a unidimensional model asserts that one latent trait accounts for the covariation among items. If two traits are present, the single <var>θ</var> scale is a blend of them, and every item parameter, information curve and reliability figure describes a construct nobody defined. This is not a technicality — it is the difference between measuring something and measuring an average of two things in unknown proportion.</p>
+
+<h3>Why the correlation matrix must be polychoric</h3>
+
+<p>All the analyses below start from a correlation matrix, and which correlation you use decides whether the answer means anything.</p>
+
+<p>A Pearson correlation between two binary items is attenuated by the coarseness of the categories themselves, and the amount of attenuation depends on how far apart the two items’ p-values are. Factor-analyse a Pearson matrix of binary items and you reliably discover <strong>“difficulty factors”</strong>: factors that group items by how hard they are rather than by what they are about. Many published claims of multidimensionality are this artefact.</p>
+
+<p>The <strong>polychoric</strong> correlation estimates the correlation of the continuous variables assumed to underlie the observed categories, and does not have the artefact. IRTBoss uses it throughout <code>assumptions.py</code>.</p>
+
+<h3>Parallel analysis</h3>
+
+<p>How many factors are there? The oldest advice — count eigenvalues above 1 — is unreliable. Parallel analysis compares your eigenvalues against those from random data of the same shape:</p>
+
+<ol class="steps">
+  <li>Compute the eigenvalues of your polychoric matrix.</li>
+  <li>Generate many random datasets with the same number of respondents and items and no real structure; compute their eigenvalues.</li>
+  <li>Retain a factor if your eigenvalue exceeds the corresponding percentile (commonly the 95th) of the random ones.</li>
+</ol>
+
+<p>The logic is that sampling noise alone produces a first eigenvalue noticeably above 1, so “above 1” is the wrong bar; “above what noise produces” is the right one.</p>
+
+<h3>Velicer’s MAP</h3>
+
+<p>Velicer’s minimum average partial method takes a complementary route: extract components one at a time, and after each, compute the average squared partial correlation among the items with that component removed. That average falls while real common variance is being extracted and rises once you start removing noise. The minimum indicates the number of components.</p>
+
+<p>Reporting both is deliberate: parallel analysis and MAP fail in different directions, and agreement between them is much stronger evidence than either alone.</p>
+
+<h3>The bifactor indices: ECV, PUC and ω<sub>h</sub></h3>
+
+<p>Strict unidimensionality is rare, and the practical question is not “is there any multidimensionality?” but “is it enough to matter?” Three indices address that (Rodriguez, Reise &amp; Haviland, 2016):</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Index</th><th>Reads as</th><th>Interpretation</th></tr></thead>
+<tbody>
+<tr><td><strong>ECV</strong><br>explained common variance</td><td>Proportion of common variance attributable to the general factor</td><td>High ECV means one dominant factor with minor group factors — a unidimensional model is defensible</td></tr>
+<tr><td><strong>PUC</strong><br>percent uncontaminated correlations</td><td>Proportion of item pairs that do <em>not</em> share a group factor</td><td>Contextualises ECV. When PUC is high, even moderate ECV is tolerable</td></tr>
+<tr><td><strong>ω<sub>h</sub></strong><br>omega hierarchical</td><td>Proportion of total score variance due to the general factor</td><td>The bottom line: if ω<sub>h</sub> is high, total scores mostly reflect the general trait despite multidimensionality</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box box-warn">
+<h4>A scope limit the tool states about itself</h4>
+<p>IRTBoss’s bifactor decomposition is a <strong>Schmid–Leiman-style approximation built from principal components, not a fitted bifactor model.</strong> The module says so, and repeats it in the <code>notes</code> of the returned object so the caveat travels into the report. If dimensionality is central to your argument, fit a real bifactor or multidimensional model in dedicated software. Using an approximation is fine; using it while believing it is a fitted model is not.</p>
+</div>
+
+<h3>Nothing here returns a verdict</h3>
+
+<p>The module docstring is explicit: “Nothing in this module returns a bare verdict. Dimensionality decisions rest on judgement that a rule cannot encode.” Every statistic carries the conditions under which it is informative. If you want a tool that prints “unidimensional: yes”, this is not that tool — deliberately.</p>
+
+<h2>Assumption two: local independence</h2>
+
+<p>Local independence says that once you know <var>θ</var>, responses to different items are independent. It is violated whenever a pair of items shares something the trait does not explain: a common reading passage, a cue in one item that gives away another, two items that are near-paraphrases.</p>
+
+<p>The consequence is specific and always in the flattering direction. A dependent pair effectively counts as <em>less than two items</em>, but the information formula in Part 5 adds them as two. So <strong>test information is overstated and reliability is inflated</strong>. You believe your instrument is more precise than it is.</p>
+
+<h3>Q3 and Q3*</h3>
+
+<p>Yen’s Q3 is the correlation between residuals for a pair of items, across respondents:</p>
+
+<div class="eq">
+Q3<sub><var>jk</var></sub> <span class="op">=</span> corr<sub><var>i</var></sub>( <var>x<sub>ij</sub></var> <span class="op">−</span> <var>E</var>[<var>x<sub>ij</sub></var> <span class="op">|</span> <var>θ̂<sub>i</sub></var>], <span style="padding-left:0.3em"><var>x<sub>ik</sub></var> <span class="op">−</span> <var>E</var>[<var>x<sub>ik</sub></var> <span class="op">|</span> <var>θ̂<sub>i</sub></var>] )</span>
+<span class="tag">(9)</span>
+</div>
+
+<p>Under local independence these residuals should be uncorrelated. But Q3 carries a known negative bias: because <var>θ̂</var> is estimated from all the items, the residuals are mechanically slightly negatively correlated even when the assumption holds. Christensen, Makransky &amp; Horton (2017) showed this and gave the corrected <strong>Q3*</strong>, which subtracts the average Q3 across all pairs, together with a critical value.</p>
+
+<p>IRTBoss determines the critical value by <strong>bootstrap</strong> rather than by a fixed table, because the null distribution depends on the test length, the sample size and the model. Simulate datasets from the fitted model, compute Q3* on each, and take the upper percentile of the resulting distribution as the threshold. A pair exceeding it is flagged.</p>
+
+<div class="box box-warn">
+<h4>The caveat on that bootstrap</h4>
+<p>The null is generated with the <strong>fitted item parameters held fixed</strong>, rather than re-estimating parameters within each bootstrap replicate. That makes the critical value slightly too small — it ignores the extra variability that parameter estimation contributes — so the screen is marginally liberal. Re-estimating within each replicate would multiply the cost by the number of replicates. The module records the choice; it is not hidden.</p>
+</div>
+
+<h3>What to do with a flagged pair</h3>
+
+<p>Look at the items. Locally dependent pairs almost always have a visible explanation, and the fix is editorial rather than statistical: combine the pair into a single polytomous item (a “testlet”), drop one of them, or accept the dependence and treat the reported reliability as an upper bound. What you must not do is report the inflated reliability without qualification.</p>
+
+<h2>A workflow for reading the fit section</h2>
+
+<ol class="steps">
+  <li><strong>Assumptions first.</strong> If unidimensionality is badly violated, every item statistic below describes a blended construct and item-level tinkering is beside the point.</li>
+  <li><strong>Then local independence.</strong> Flagged pairs mean your precision figures are optimistic. Note it before quoting reliability anywhere.</li>
+  <li><strong>Then global fit.</strong> M2 with its RMSEA2 interval and SRMSR. Remember the guessing blind spot.</li>
+  <li><strong>Then item fit, ranked by effect size.</strong> Read RMSD to judge whether misfit matters, S-X² to judge whether it is real, infit and outfit to characterise its shape. Ignore the ranking by <var>p</var>-value.</li>
+  <li><strong>Only then decide.</strong> And record the sample size next to every conclusion, because at <var>N</var> = 5,000 “significant” and “important” have almost nothing to do with each other.</li>
+</ol>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>Fit tests reject any model given enough data, so effect sizes govern and <var>p</var>-values are context.</li>
+  <li>S-X² conditions on the observed rest score, computed via the Lord–Wingersky recursion, which is what makes it a genuine chi-square; trust it over the residual statistics.</li>
+  <li>Infit and outfit are mean-square residuals expected to equal 1; underfit is the serious direction. Reported as effect sizes only, without <var>t</var>-transformations.</li>
+  <li>RMSD is on the probability scale and does not grow with <var>N</var> — the effect size to quote.</li>
+  <li>Full-information global fit is unusable through sparsity; M2 tests only low-order margins, with df = moments − parameters, and is computed in a numerically safer algebraically identical form.</li>
+  <li>M2 has poor power against guessing; a non-significant result is not evidence against a 3PL.</li>
+  <li>Unidimensionality is examined on the polychoric matrix, because Pearson correlations manufacture difficulty factors, using parallel analysis, Velicer’s MAP and approximate bifactor indices — with no verdict returned.</li>
+  <li>Local independence violations always inflate reliability. Q3* with a bootstrapped critical value flags pairs; the bootstrap is slightly liberal and says so.</li>
+</ul>
+
+<nav class="pager">
+  <a href="05-scoring-precision.html"><span class="lbl">Previous</span>← Part 5 · Scoring and precision</a>
+  <a href="07-dif.html"><span class="lbl">Next</span>Part 7 · Differential item functioning →</a>
+</nav>
+
+</div>
+</body>
+</html>

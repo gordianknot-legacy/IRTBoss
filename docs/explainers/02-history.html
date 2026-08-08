@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 2 · A history of item response theory</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 2 of 12</p>
+  <h1>A history of item response theory, 1904 to today</h1>
+  <ul class="tracks">
+    <li class="track track-stake">Stakeholder</li>
+    <li class="track track-user">Analyst</li>
+  </ul>
+  <p class="lede">Every model in this tool is someone’s answer to a specific problem, and the answers arrived in an order that makes them much easier to understand. This part is that order — plus the century-old dispute you will run into the first time you say the word “Rasch” out loud in a room of psychometricians.</p>
+</header>
+
+<h2>Why the history is worth your time</h2>
+
+<p>You can use IRT without knowing where it came from, but three things become clearer if you do. Why there are two models that look almost identical and are the subject of heated disagreement (Rasch and 1PL). Why the estimation algorithm is a 1981 paper rather than something more modern. And why the field has such strong opinions about honesty in reporting — a habit acquired the hard way, through decades of high-stakes testing where the numbers decided who got into university.</p>
+
+<h2>Before IRT: the true-score era, 1904–1950</h2>
+
+<p>The statistical study of mental tests begins with <strong>Charles Spearman</strong>, whose 1904 papers introduced both factor analysis and the correction for attenuation — the observation that correlations between imperfect measures understate the correlation between the things measured. This is the origin of the true-score idea we met in Part 1: an observed score is a true value plus error.</p>
+
+<p>Spearman’s framework, later systematised as classical test theory, dominated for half a century. It works with totals and correlations, and it is silent about individual items. That silence is the gap IRT fills.</p>
+
+<p>The first serious attempt to model items directly is <strong>Louis Thurstone</strong>’s, in the 1920s. His 1925 paper <em>A method of scaling psychological and educational tests</em> took Binet-style test data and placed both children and items on a common developmental scale — arguably the first item response model, though not framed probabilistically in the modern way. His 1927 <em>law of comparative judgment</em> supplied the crucial statistical move: model a response as the outcome of a comparison with normally distributed noise, and you can recover a scale from nothing but choices.</p>
+
+<p>Through the 1930s and 1940s, several authors — including <strong>Richardson</strong>, <strong>Ferguson</strong>, <strong>Lawley</strong> and <strong>Tucker</strong> — worked on estimating item parameters from a normal-ogive response function. Their methods were laborious, computationally impossible at scale, and largely shelved. The ideas were right; the machines were not there yet.</p>
+
+<h2>The founding: Lord, Birnbaum and Rasch, 1952–1968</h2>
+
+<h3>Lord’s normal ogive, 1952</h3>
+
+<p><strong>Frederic Lord</strong>’s monograph <em>A theory of test scores</em> (Psychometrika Monograph No. 7, 1952) is the usual starting point for modern IRT. Lord modelled the probability of a correct answer as a cumulative normal function of ability, with two item parameters — a location (difficulty) and a slope (discrimination). This is the two-parameter normal ogive model, and it establishes the shape of everything that follows: a smooth S-curve rising from near zero to near one as ability increases.</p>
+
+<p>Lord worked at Educational Testing Service, which matters: he had access to enormous volumes of real test data and an institutional need for methods that could survive scrutiny in high-stakes admissions testing.</p>
+
+<h3>Birnbaum’s logistic and the third parameter, 1957–1968</h3>
+
+<p><strong>Allan Birnbaum</strong> made two changes that turned an elegant model into a usable one. First, he replaced the cumulative normal with the <em>logistic</em> function, which is nearly identical in shape but has a closed-form expression, making derivatives and estimation dramatically more tractable. Second, he added a lower asymptote — a non-zero probability of a correct answer for someone of very low ability, capturing guessing on multiple-choice items. This is the three-parameter logistic model, the 3PL.</p>
+
+<p>Birnbaum’s work reached a wide audience through chapters he contributed to <strong>Lord &amp; Novick</strong>’s <em>Statistical Theories of Mental Test Scores</em> (1968), the book that consolidated the field. If IRT has a canonical text, that is it.</p>
+
+<h3>Rasch’s separability, 1960</h3>
+
+<p>Independently and from a different direction, the Danish mathematician <strong>Georg Rasch</strong> published <em>Probabilistic Models for Some Intelligence and Attainment Tests</em> in 1960. Rasch arrived at what is algebraically the simplest model in the family — one parameter per item, all items equally discriminating — but he arrived at it for a reason that was philosophical rather than pragmatic.</p>
+
+<p>Rasch was after what he called <strong>specific objectivity</strong>: comparisons between two people should not depend on which items were used, and comparisons between two items should not depend on which people answered them. He showed that this requirement is not a nice property you might hope for — it is a mathematical constraint that <em>forces</em> the model form. In the Rasch model, the total score is a sufficient statistic for ability, meaning it captures everything the data has to say about the person. That is an unusually strong property, and it is the source of the Rasch tradition’s conviction.</p>
+
+<div class="box">
+<h4>The schism, stated fairly</h4>
+<p>The Rasch model and the 1PL model produce the same response function. The disagreement is about what to do when data do not fit it.</p>
+<p><strong>The IRT view</strong> (Lord, Birnbaum, ETS): the model is a description. If items differ in discrimination, use a model with a discrimination parameter — the 2PL. Let the data choose the model.</p>
+<p><strong>The Rasch view</strong> (Rasch, Benjamin Wright and the Chicago school): the model is a <em>requirement</em> for measurement. If an item does not fit, the item is defective and should be revised or removed, because only the Rasch form delivers specific objectivity. Let the model discipline the instrument.</p>
+<p>Neither position is silly, and the choice is genuinely about purpose. If you are constructing an instrument you control, the Rasch discipline is powerful. If you are analysing a test that already exists and must describe it accurately, insisting on equal discriminations discards real variation. IRTBoss takes no side: it fits both, keeps them <em>separate</em> rather than treating Rasch as a special case of 1PL, and reports how each performs. Part 3 explains the one technical difference that makes separating them necessary — the treatment of the latent standard deviation.</p>
+</div>
+
+<h2>Beyond right and wrong: polytomous models, 1969–1992</h2>
+
+<p>Real instruments are often not scored right/wrong. Essays get partial credit. Attitude surveys use “strongly disagree” to “strongly agree”. Clinical scales use frequency categories. Extending IRT to ordered categories took three important papers, each solving the problem differently.</p>
+
+<h3>Samejima’s graded response model, 1969</h3>
+
+<p><strong>Fumiko Samejima</strong>’s monograph <em>Estimation of latent ability using a response pattern of graded responses</em> introduced the GRM. Her approach: model the probability of scoring <em>at or above</em> each category boundary as a 2PL curve, then get the probability of landing exactly in a category by subtraction. This is the “cumulative” or “difference” approach, and it gives each boundary its own threshold while sharing one discrimination across the item.</p>
+
+<h3>Bock’s nominal model, 1972</h3>
+
+<p><strong>Darrell Bock</strong>’s nominal response model handles categories with no inherent order — which distractor a candidate chose, for instance. It is the parent of the “divide-by-total” family, and although IRTBoss does not implement it, its algebra is the template for the partial credit models that follow.</p>
+
+<h3>Masters’ partial credit model, 1982</h3>
+
+<p><strong>Geoff Masters</strong> derived the PCM from the Rasch model by applying Rasch’s logic to <em>adjacent</em> categories: the choice between scoring <var>k</var>−1 and <var>k</var> is itself a Rasch decision, with its own step difficulty. Because it inherits the Rasch form, it keeps the separability property and requires no discrimination parameter. It became the standard model for partial-credit educational assessment.</p>
+
+<h3>Muraki’s generalised partial credit model, 1992</h3>
+
+<p><strong>Eiji Muraki</strong> added a discrimination parameter to the PCM, producing the GPCM. This is the model of choice when items are ordered-categorical <em>and</em> vary in how sharply they separate people — the common case in psychological and health measurement.</p>
+
+<div class="box">
+<h4>GRM or GPCM? A question people expect to have an answer to</h4>
+<p>They usually fit ordered-categorical data about equally well and are hard to distinguish empirically. GRM thinks in terms of cumulative boundaries (“the probability of at least a 3”); GPCM thinks in terms of adjacent steps (“given you are at 2 or 3, the probability of 3”). Choose by which description matches how the item was designed, not by a fit statistic that will likely be ambiguous. This is exactly the situation Part 8 is about.</p>
+</div>
+
+<h2>The estimation problem, and the algorithm this tool uses</h2>
+
+<p>Having a model is not the same as being able to fit it. This is the part of the history that most directly determines what is inside IRTBoss.</p>
+
+<p>The naive approach is to estimate every item parameter and every person parameter at once, by maximising the joint likelihood. It fails, and it fails for a deep reason rather than a computational one: every additional respondent adds another unknown parameter, so the number of unknowns grows with the sample. Estimates of the item parameters are then not guaranteed to become accurate as you collect more data. This is the <strong>incidental parameters problem</strong>, recognised in econometrics by Neyman and Scott in 1948, and it is why joint estimation is not used for this purpose.</p>
+
+<p>The fix is to stop treating person abilities as parameters at all. Instead, assume they are drawn from a population distribution and <em>integrate them out</em>, leaving a likelihood that depends only on item parameters. This is <strong>marginal maximum likelihood</strong> (MML).</p>
+
+<p><strong>Bock &amp; Lieberman</strong> (1970) did this exactly, but their method required enumerating every possible response pattern, which is 2<sup><var>n</var></sup> patterns for <var>n</var> binary items — fine for five items, hopeless for fifty.</p>
+
+<p>The breakthrough is <strong>Bock &amp; Aitkin</strong> (1981), <em>Marginal maximum likelihood estimation of item parameters: application of an EM algorithm</em>. Two moves: approximate the integral over the ability distribution with a finite grid of quadrature points, and organise the computation as an <strong>EM algorithm</strong> — alternating between estimating how respondents are distributed over the grid, and re-estimating item parameters as if those distributions were data. It scales to realistic tests, it is numerically stable, and it is what IRTBoss implements in <code>backend/app/irt/em.py</code>. Part 4 derives it in full.</p>
+
+<p>Two refinements complete the picture. <strong>Mislevy</strong> (1986) formalised the use of prior distributions on item parameters, which is how IRTBoss keeps the 3PL’s guessing parameter from wandering into nonsense. <strong>Warm</strong> (1989) derived weighted likelihood estimation, a person-scoring method that removes the leading bias term of maximum likelihood — one of the three scoring methods in Part 5.</p>
+
+<figure>
+<svg viewBox="0 0 720 430" role="img" aria-label="Lineage diagram: Thurstone leads to Lord's normal ogive, which leads to Birnbaum's logistic and 3PL; Rasch is a separate root leading to Masters' PCM and Muraki's GPCM; Samejima's GRM descends from the 2PL; Bock and Lieberman's exact marginal likelihood leads to Bock and Aitkin's EM algorithm, which estimates all of them in IRTBoss.">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <!-- lane labels -->
+  <text x="8" y="42" font-size="10" fill="currentColor">DICHOTOMOUS</text>
+  <text x="8" y="150" font-size="10" fill="currentColor">RASCH BRANCH</text>
+  <text x="8" y="258" font-size="10" fill="currentColor">POLYTOMOUS</text>
+  <text x="8" y="352" font-size="10" fill="currentColor">ESTIMATION</text>
+
+  <!-- lane 1 -->
+  <rect x="110" y="20" width="120" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="170" y="40" font-size="11" fill="currentColor" text-anchor="middle">Thurstone 1925</text>
+  <text x="170" y="55" font-size="10" fill="currentColor" text-anchor="middle">common scale</text>
+
+  <rect x="285" y="20" width="120" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="345" y="40" font-size="11" fill="currentColor" text-anchor="middle">Lord 1952</text>
+  <text x="345" y="55" font-size="10" fill="currentColor" text-anchor="middle">normal ogive, 2P</text>
+
+  <rect x="460" y="20" width="120" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="520" y="40" font-size="11" fill="currentColor" text-anchor="middle">Birnbaum 1968</text>
+  <text x="520" y="55" font-size="10" fill="currentColor" text-anchor="middle">logistic, 2PL, 3PL</text>
+
+  <line x1="230" y1="43" x2="280" y2="43" stroke="currentColor" marker-end="url(#ar)"/>
+  <line x1="405" y1="43" x2="455" y2="43" stroke="currentColor" marker-end="url(#ar)"/>
+  <text x="430" y="36" font-size="9" fill="currentColor" text-anchor="middle">closed form</text>
+
+  <!-- lane 2 -->
+  <rect x="110" y="128" width="120" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="170" y="148" font-size="11" fill="currentColor" text-anchor="middle">Rasch 1960</text>
+  <text x="170" y="163" font-size="10" fill="currentColor" text-anchor="middle">separability</text>
+
+  <rect x="285" y="128" width="120" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="345" y="148" font-size="11" fill="currentColor" text-anchor="middle">Masters 1982</text>
+  <text x="345" y="163" font-size="10" fill="currentColor" text-anchor="middle">PCM</text>
+
+  <rect x="460" y="128" width="120" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="520" y="148" font-size="11" fill="currentColor" text-anchor="middle">Muraki 1992</text>
+  <text x="520" y="163" font-size="10" fill="currentColor" text-anchor="middle">GPCM</text>
+
+  <line x1="230" y1="151" x2="280" y2="151" stroke="currentColor" marker-end="url(#ar)"/>
+  <text x="255" y="144" font-size="9" fill="currentColor" text-anchor="middle">steps</text>
+  <line x1="405" y1="151" x2="455" y2="151" stroke="currentColor" marker-end="url(#ar)"/>
+  <text x="430" y="144" font-size="9" fill="currentColor" text-anchor="middle">+ slope</text>
+
+  <!-- lane 3 -->
+  <rect x="285" y="236" width="120" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="345" y="256" font-size="11" fill="currentColor" text-anchor="middle">Samejima 1969</text>
+  <text x="345" y="271" font-size="10" fill="currentColor" text-anchor="middle">GRM</text>
+
+  <!-- 2PL -> GRM -->
+  <path d="M 520 66 L 520 100 L 345 100 L 345 232" fill="none" stroke="currentColor" marker-end="url(#ar)"/>
+  <text x="432" y="94" font-size="9" fill="currentColor" text-anchor="middle">cumulative boundaries</text>
+
+  <!-- lane 4 -->
+  <rect x="110" y="330" width="120" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="170" y="350" font-size="11" fill="currentColor" text-anchor="middle">Bock &amp; Lieberman</text>
+  <text x="170" y="365" font-size="10" fill="currentColor" text-anchor="middle">1970, exact MML</text>
+
+  <rect x="285" y="330" width="140" height="46" rx="4" fill="none" stroke="var(--accent)" stroke-width="2"/>
+  <text x="355" y="350" font-size="11" fill="currentColor" text-anchor="middle">Bock &amp; Aitkin 1981</text>
+  <text x="355" y="365" font-size="10" fill="currentColor" text-anchor="middle">EM + quadrature</text>
+
+  <rect x="480" y="330" width="140" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="550" y="350" font-size="11" fill="currentColor" text-anchor="middle">IRTBoss engine</text>
+  <text x="550" y="365" font-size="10" fill="currentColor" text-anchor="middle">app/irt/em.py</text>
+
+  <line x1="230" y1="353" x2="280" y2="353" stroke="currentColor" marker-end="url(#ar)"/>
+  <text x="255" y="346" font-size="9" fill="currentColor" text-anchor="middle">scales</text>
+  <line x1="425" y1="353" x2="475" y2="353" stroke="currentColor" marker-end="url(#ar)"/>
+
+  <!-- models feed the estimator -->
+  <path d="M 640 43 L 665 43 L 665 300 L 550 300 L 550 326" fill="none" stroke="currentColor" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+  <path d="M 600 151 L 665 151" fill="none" stroke="currentColor" stroke-dasharray="3 3"/>
+  <path d="M 405 259 L 665 259" fill="none" stroke="currentColor" stroke-dasharray="3 3"/>
+  <text x="672" y="180" font-size="9" fill="currentColor">all seven families</text>
+  <text x="672" y="193" font-size="9" fill="currentColor">share one estimator</text>
+</svg>
+<figcaption>Which idea depends on which. The solid arrows are derivations; the dashed lines show that all seven model families are fitted by the same 1981 algorithm, which is why the engine has one estimation routine and seven probability functions rather than seven estimators.</figcaption>
+</figure>
+
+<h2>Diagnostics: learning to distrust the fit, 1984–2017</h2>
+
+<p>Once fitting was routine, attention turned to whether the fitted model was any good. IRTBoss implements the results of that work, and each statistic exists because an earlier one was found wanting.</p>
+
+<ul>
+  <li><strong>Yen (1984)</strong> proposed Q3, a correlation between residuals, to detect items that are related beyond what the trait explains — a violation of local independence. <strong>Christensen, Makransky &amp; Horton (2017)</strong> showed Q3 carries a bias and gave the corrected Q3* with an empirically determined critical value, which is what the tool uses.</li>
+  <li><strong>Orlando &amp; Thissen (2000, 2003)</strong> replaced the older practice of grouping respondents by estimated ability — which biases the resulting chi-square — with <strong>S-X²</strong>, grouped by observed rest score. This depends on the <strong>Lord &amp; Wingersky (1984)</strong> recursion for computing the distribution of summed scores under the model.</li>
+  <li><strong>Maydeu-Olivares &amp; Joe</strong> (mid-2000s) developed <strong>M2</strong>, a limited-information global fit statistic that works where the full contingency table is impossibly sparse, along with the associated RMSEA2. <strong>Cai &amp; Hansen (2013)</strong> extended it to ordinal items as M2*.</li>
+  <li><strong>Holland &amp; Thayer (1988)</strong> brought the Mantel–Haenszel procedure to DIF detection and, with colleagues at ETS, produced the A/B/C effect-size classification still used operationally. <strong>Swaminathan &amp; Rogers (1990)</strong> added logistic-regression DIF, which can distinguish uniform from non-uniform DIF. <strong>Thissen, Steinberg &amp; Wainer (1988)</strong> gave the IRT likelihood-ratio approach.</li>
+</ul>
+
+<p>The direction of travel in that list is worth noticing: each step makes the diagnostic <em>harder to pass accidentally</em>. That is the tradition IRTBoss is trying to sit in.</p>
+
+<h2>The software era, 1990s–present</h2>
+
+<p>IRT was, for decades, gatekept by software. Early programs — LOGIST, BILOG, PARSCALE, MULTILOG — were commercial, command-line, and largely the province of specialists at testing organisations.</p>
+
+<p>The decisive change was <strong>Phil Chalmers</strong>’ <strong>mirt</strong> package for R (2012), which put full-information multidimensional and unidimensional IRT, with modern diagnostics, into a free and widely used environment. mirt is the de facto reference implementation in the field, and it plays a specific role in this project: IRTBoss’s Tier 2 test suite fits committed datasets in both implementations and compares parameters, log-likelihoods and free-parameter counts. An estimator that agrees with an independent implementation on fixed data is a much stronger claim than one that merely converges.</p>
+
+<div class="box box-warn">
+<h4>What is honest to say about that comparison right now</h4>
+<p>The Tier 2 harness exists, is written, and has never executed. Its fixtures were excluded from the repository by an over-broad ignore rule until recently, and scheduled workflows only run from the default branch, which does not yet carry the CI configuration. Agreement with mirt is therefore currently a claim about code that has been read, not about a job that has passed. <a href="../../PROGRESS.md">PROGRESS.md</a> records this, and it will be checked on the first scheduled run after the branch merges.</p>
+</div>
+
+<h2>Where the field is now</h2>
+
+<p>Three developments beyond what IRTBoss implements, so you know what is out there:</p>
+
+<ul>
+  <li><strong>Multidimensional IRT</strong> (Reckase and others) models several correlated traits at once, which matters when an instrument genuinely measures more than one thing. IRTBoss is unidimensional by design, and it <em>tests</em> that assumption rather than asserting it — see Part 6.</li>
+  <li><strong>Explanatory and mixture models</strong> bring covariates into the model, letting item difficulty depend on item features or respondent groups.</li>
+  <li><strong>Bayesian estimation</strong> with MCMC or variational methods gives full posterior distributions rather than point estimates with standard errors. This is the most likely future direction for a tool like this one, and the honest reason it is not here is that MML with an EM algorithm is better understood, faster, and easier to validate against an independent implementation.</li>
+</ul>
+
+<p>Applications kept pace: NAEP has used IRT scaling since the mid-1980s; PISA, TIMSS and PIRLS all rest on it; the NIH-funded <strong>PROMIS</strong> initiative rebuilt patient-reported health measurement on IRT in the 2000s; and computer adaptive testing moved from research to routine in the GRE, GMAT, the military’s CAT-ASVAB and, more recently, the Duolingo English Test. Part 9 covers these in detail.</p>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>Thurstone framed the problem; Lord gave it a response function; Birnbaum made it computable and added guessing; Rasch derived a stricter model from a requirement about objectivity.</li>
+  <li>Rasch and 1PL share an equation and disagree about what a misfitting item means. Both are defensible; IRTBoss fits both and keeps them separate.</li>
+  <li>Polytomous models came in two flavours: cumulative (GRM) and adjacent-step (PCM, GPCM).</li>
+  <li>Joint estimation fails because of the incidental parameters problem. Marginal maximum likelihood fixes it, and Bock &amp; Aitkin’s 1981 EM-with-quadrature made it practical. That is the algorithm in this tool.</li>
+  <li>Every diagnostic in Part 6 and Part 7 exists because a simpler predecessor was too easy to pass.</li>
+</ul>
+
+<nav class="pager">
+  <a href="01-what-and-why.html"><span class="lbl">Previous</span>← Part 1 · Why measurement is hard</a>
+  <a href="03-models.html"><span class="lbl">Next</span>Part 3 · The models →</a>
+</nav>
+
+</div>
+</body>
+</html>

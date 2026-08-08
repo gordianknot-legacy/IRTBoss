@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 4 · How the numbers are actually found</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 4 of 12</p>
+  <h1>How the numbers are actually found</h1>
+  <ul class="tracks">
+    <li class="track track-user">Analyst</li>
+    <li class="track track-maint">Maintainer</li>
+  </ul>
+  <p class="lede">A complete derivation of the Bock–Aitkin EM algorithm, from the likelihood you would naively write down to the code in <code>backend/app/irt/em.py</code> — including the standard errors, the numerical safeguards, and why a failed fit is thrown away rather than reported.</p>
+</header>
+
+<h2>The problem, stated exactly</h2>
+
+<p>We observe a matrix of responses. Write <var>x<sub>ij</sub></var> for the response of person <var>i</var> to item <var>j</var>. We want the item parameters — call the whole collection <var>φ</var>. We do not especially want the person abilities yet; those come in Part 5.</p>
+
+<p>The model from Part 3 gives us the probability of a single response given an ability. Two assumptions turn that into the probability of a whole response vector:</p>
+
+<ol>
+  <li><strong>Unidimensionality</strong> — one <var>θ</var> per person accounts for their responses.</li>
+  <li><strong>Local independence</strong> — given <var>θ</var>, responses to different items are independent.</li>
+</ol>
+
+<p>Both are testable, and Part 6 tests them. Granting them, the probability of person <var>i</var>’s entire response pattern is a product:</p>
+
+<div class="eq">
+<var>P</var>(<b>x</b><sub><var>i</var></sub> <span class="op">|</span> <var>θ</var>, <var>φ</var>) <span class="op">=</span> <span style="font-size:1.3em">∏</span><sub><var>j</var></sub> <var>P<sub>j</sub></var>(<var>x<sub>ij</sub></var> <span class="op">|</span> <var>θ</var>, <var>φ<sub>j</sub></var>)
+<span class="tag">(1)</span>
+</div>
+
+<h2>Attempt one: maximise the joint likelihood. Why it fails</h2>
+
+<p>The obvious move is to treat every <var>θ<sub>i</sub></var> as an unknown alongside <var>φ</var> and maximise everything at once:</p>
+
+<div class="eq">
+<var>L</var><sub>joint</sub>(<var>φ</var>, <var>θ</var><sub>1</sub>…<var>θ<sub>N</sub></var>) <span class="op">=</span> <span style="font-size:1.3em">∏</span><sub><var>i</var></sub> <span style="font-size:1.3em">∏</span><sub><var>j</var></sub> <var>P<sub>j</sub></var>(<var>x<sub>ij</sub></var> <span class="op">|</span> <var>θ<sub>i</sub></var>, <var>φ<sub>j</sub></var>)
+<span class="tag">(2)</span>
+</div>
+
+<p>This is called joint maximum likelihood, and it is not used for this purpose. The reason is structural. Ordinary maximum likelihood theory promises that estimates converge on the truth as the sample grows, because the amount of data per parameter grows. Here, every new respondent brings a new parameter with them. The ratio of data to parameters does not improve, and the item parameter estimates are not guaranteed to converge on anything correct.</p>
+
+<p>This is the <strong>incidental parameters problem</strong>, identified by Neyman and Scott in 1948. In IRT specifically, joint estimation produces discriminations biased away from their true values by a factor that does not shrink with sample size. There are also mundane failures: anyone who answered every item correctly has a maximum-likelihood ability of +∞.</p>
+
+<h2>Attempt two: integrate the abilities away</h2>
+
+<p>The fix is to stop treating abilities as parameters. Instead, assume respondents were drawn from a population whose ability distribution is <var>g</var>(<var>θ</var>) — conventionally standard normal — and average over it. For one respondent:</p>
+
+<div class="eq">
+<var>L<sub>i</sub></var>(<var>φ</var>) <span class="op">=</span> ∫ <var>P</var>(<b>x</b><sub><var>i</var></sub> <span class="op">|</span> <var>θ</var>, <var>φ</var>) <var>g</var>(<var>θ</var>) d<var>θ</var>
+<span class="tag">(3)</span>
+</div>
+
+<p>and the <strong>marginal log-likelihood</strong> over the whole sample is</p>
+
+<div class="eq">
+<var>ℓ</var>(<var>φ</var>) <span class="op">=</span> <span style="font-size:1.3em">∑</span><sub><var>i</var>=1</sub><sup><var>N</var></sup> ln ∫ <span style="font-size:1.2em">∏</span><sub><var>j</var></sub> <var>P<sub>j</sub></var>(<var>x<sub>ij</sub></var> <span class="op">|</span> <var>θ</var>, <var>φ<sub>j</sub></var>) <var>g</var>(<var>θ</var>) d<var>θ</var>
+<span class="tag">(4)</span>
+</div>
+
+<p>Now the parameter count is fixed no matter how many respondents you add, and standard asymptotic theory applies: the estimates converge, and their standard errors mean what standard errors normally mean. This is <strong>marginal maximum likelihood</strong>.</p>
+
+<p>The price is equation (4): a logarithm of an integral of a product, with no closed form. Two obstacles — the integral, and the fact that the log-of-a-sum does not factor into anything convenient. The next two sections remove them one at a time.</p>
+
+<h2>Obstacle one: the integral becomes a weighted sum</h2>
+
+<p>Replace the integral with a finite weighted sum over a grid of <var>θ</var> values — <strong>quadrature</strong>. Choose nodes <var>θ</var><sub>1</sub>…<var>θ<sub>Q</sub></var> and weights <var>A</var><sub>1</sub>…<var>A<sub>Q</sub></var> so that</p>
+
+<div class="eq">
+∫ <var>f</var>(<var>θ</var>) <var>g</var>(<var>θ</var>) d<var>θ</var> <span class="op">≈</span> <span style="font-size:1.3em">∑</span><sub><var>k</var>=1</sub><sup><var>Q</var></sup> <var>f</var>(<var>θ<sub>k</sub></var>) <var>A<sub>k</sub></var>
+<span class="tag">(5)</span>
+</div>
+
+<p>The weights are the normal density evaluated at the nodes, normalised to sum to 1 — so <var>A<sub>k</sub></var> is “the proportion of the population expected to sit near node <var>k</var>”.</p>
+
+<div class="box box-code">
+<h4>The grid this tool uses — <code>Quadrature.normal</code></h4>
+<p>61 equally spaced nodes spanning ±6 standard deviations. Both numbers are deliberate. The range covers essentially all of the population — beyond ±6 SD the normal density is negligible — and 61 points put the spacing at 0.2 logits, fine enough that, in the module’s own words, “quadrature error is far below the sampling error of any real dataset.” Coarser grids are common in older software and introduce a small systematic bias; finer grids cost time and buy nothing measurable.</p>
+<p>For the Rasch and PCM families, where the population standard deviation is estimated, <code>Quadrature.reweight(sd)</code> recomputes the weights for the current <var>σ</var> while keeping the nodes fixed. The grid stays put; the population sitting on it changes shape.</p>
+</div>
+
+<p>With (5), equation (4) becomes finite and computable:</p>
+
+<div class="eq">
+<var>ℓ</var>(<var>φ</var>) <span class="op">≈</span> <span style="font-size:1.3em">∑</span><sub><var>i</var></sub> ln <span style="font-size:1.3em">∑</span><sub><var>k</var></sub> <var>P</var>(<b>x</b><sub><var>i</var></sub> <span class="op">|</span> <var>θ<sub>k</sub></var>) <var>A<sub>k</sub></var>
+<span class="tag">(6)</span>
+</div>
+
+<h2>Obstacle two: EM turns one hard problem into many easy ones</h2>
+
+<p>Equation (6) can be handed to a general optimiser, but that means optimising every item’s parameters simultaneously — hundreds of dimensions, with a log-sum inside. The EM algorithm does something much better.</p>
+
+<p>The trick is to treat each person’s ability as <em>missing data</em>. If we knew every <var>θ<sub>i</sub></var>, the problem would be easy. We do not, but we can compute a probability distribution over where each person sits, and then optimise as if that distribution were data. Alternate the two steps and the marginal likelihood increases every cycle. That guarantee is the reason EM is used.</p>
+
+<h3>The complete-data log-likelihood</h3>
+
+<p>Pretend the abilities are known. Then</p>
+
+<div class="eq">
+<var>ℓ</var><sub>c</sub> <span class="op">=</span> <span style="font-size:1.3em">∑</span><sub><var>i</var></sub> [ <span style="font-size:1.2em">∑</span><sub><var>j</var></sub> ln <var>P<sub>j</sub></var>(<var>x<sub>ij</sub></var> <span class="op">|</span> <var>θ<sub>i</sub></var>) <span class="op">+</span> ln <var>g</var>(<var>θ<sub>i</sub></var>) ]
+<span class="tag">(7)</span>
+</div>
+
+<p>Notice that the logarithm now sits <em>inside</em> the sum over items. That is the whole gain, and everything below is bookkeeping to realise it.</p>
+
+<h3>The E-step: where is each respondent, probably?</h3>
+
+<p>Since abilities are unknown, take the expectation of (7) with respect to the posterior distribution of <var>θ<sub>i</sub></var> given the responses and the current parameter estimates. By Bayes’ theorem, on the grid:</p>
+
+<div class="eq">
+<var>p<sub>ik</sub></var> <span class="op">=</span> <var>P</var>(<var>θ<sub>k</sub></var> <span class="op">|</span> <b>x</b><sub><var>i</var></sub>) <span class="op">=</span> <var>P</var>(<b>x</b><sub><var>i</var></sub> <span class="op">|</span> <var>θ<sub>k</sub></var>) <var>A<sub>k</sub></var> <span class="op">/</span> <span style="font-size:1.2em">∑</span><sub><var>k</var>′</sub> <var>P</var>(<b>x</b><sub><var>i</var></sub> <span class="op">|</span> <var>θ<sub>k</sub></var>′) <var>A<sub>k</sub></var>′
+<span class="tag">(8)</span>
+</div>
+
+<p>Each row <var>p<sub>i</sub></var><sub>·</sub> is a probability distribution over the 61 nodes: “given this response pattern, here is how likely each ability level is.” A high scorer’s posterior piles up at the right-hand nodes; an inconsistent pattern gives a broad, flat posterior.</p>
+
+<p>The expected complete-data log-likelihood — the <strong>Q function</strong> — is then</p>
+
+<div class="eq">
+<var>Q</var>(<var>φ</var> <span class="op">|</span> <var>φ</var><sup>(<var>t</var>)</sup>) <span class="op">=</span> <span style="font-size:1.3em">∑</span><sub><var>i</var></sub> <span style="font-size:1.3em">∑</span><sub><var>k</var></sub> <var>p<sub>ik</sub></var> <span style="font-size:1.2em">∑</span><sub><var>j</var></sub> ln <var>P<sub>j</sub></var>(<var>x<sub>ij</sub></var> <span class="op">|</span> <var>θ<sub>k</sub></var>) <span class="op">+</span> const
+<span class="tag">(9)</span>
+</div>
+
+<h3>The step that makes it all work: swap the sums</h3>
+
+<p>All three sums in (9) are finite, so they commute. Move the sum over items outermost, and collect terms:</p>
+
+<div class="eq">
+<var>Q</var> <span class="op">=</span> <span style="font-size:1.3em">∑</span><sub><var>j</var></sub> <span style="font-size:1.3em">∑</span><sub><var>k</var></sub> <span style="font-size:1.3em">∑</span><sub><var>c</var></sub> <var>r<sub>jkc</sub></var> ln <var>P<sub>jc</sub></var>(<var>θ<sub>k</sub></var>)
+<span class="tag">(10)</span>
+</div>
+
+<p>where</p>
+
+<div class="eq">
+<var>r<sub>jkc</sub></var> <span class="op">=</span> <span style="font-size:1.3em">∑</span><sub><var>i</var></sub> <var>p<sub>ik</sub></var> <span class="op">·</span> 1[<var>x<sub>ij</sub></var> <span class="op">=</span> <var>c</var>]
+<span class="tag">(11)</span>
+</div>
+
+<p>Read <var>r<sub>jkc</sub></var> as: <strong>the expected number of respondents sitting at node <var>k</var> who chose category <var>c</var> on item <var>j</var></strong>. These are the “<var>r</var> accumulators”, and they are the entire interface between the two steps.</p>
+
+<p>Equation (10) is a sum of independent terms, one per item. Maximising it means maximising each item’s term separately. <strong>A single 200-dimensional problem has become fifty independent 2-dimensional problems.</strong> That is why Bock &amp; Aitkin’s algorithm scales where Bock &amp; Lieberman’s did not.</p>
+
+<h3>The M-step: fit each item to its expected counts</h3>
+
+<p>For each item <var>j</var>, find the unconstrained parameter vector <var>u<sub>j</sub></var> maximising</p>
+
+<div class="eq">
+<var>Q<sub>j</sub></var>(<var>u<sub>j</sub></var>) <span class="op">=</span> <span style="font-size:1.3em">∑</span><sub><var>k</var></sub> <span style="font-size:1.3em">∑</span><sub><var>c</var></sub> <var>r<sub>jkc</sub></var> ln <var>P<sub>jc</sub></var>(<var>θ<sub>k</sub></var>; <var>u<sub>j</sub></var>) <span class="op">+</span> ln <var>p</var>(<var>u<sub>j</sub></var>)
+<span class="tag">(12)</span>
+</div>
+
+<p>The second term is the prior from Part 3 — zero for every family except the 3PL. Because the parameterisation is unconstrained, this is an ordinary unbounded optimisation, handled by <code>scipy.optimize</code> in <code>_m_step</code>. Each call sees a problem with two or three unknowns and a cheap objective, since <var>r</var> is a small <var>Q</var> × <var>m</var> array.</p>
+
+<figure>
+<svg viewBox="0 0 700 320" role="img" aria-label="The EM cycle: current item parameters produce category probabilities on the quadrature grid, which give each response pattern a posterior over the grid, which accumulates into expected counts per node per category, which are used to refit each item independently, producing new parameters; the loop repeats until the largest parameter change falls below the tolerance.">
+  <defs>
+    <marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <rect x="255" y="18" width="190" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="350" y="38" font-size="12" fill="currentColor" text-anchor="middle">item parameters u⁽ᵗ⁾</text>
+  <text x="350" y="54" font-size="10" fill="currentColor" text-anchor="middle">unconstrained vectors</text>
+
+  <rect x="500" y="120" width="185" height="60" rx="4" fill="none" stroke="currentColor"/>
+  <text x="592" y="141" font-size="12" fill="currentColor" text-anchor="middle">E-step</text>
+  <text x="592" y="157" font-size="10" fill="currentColor" text-anchor="middle">posterior p(θₖ | xᵢ)</text>
+  <text x="592" y="171" font-size="10" fill="currentColor" text-anchor="middle">eq. (8), log-sum-exp</text>
+
+  <rect x="255" y="240" width="190" height="60" rx="4" fill="none" stroke="currentColor"/>
+  <text x="350" y="261" font-size="12" fill="currentColor" text-anchor="middle">accumulate r_jkc</text>
+  <text x="350" y="277" font-size="10" fill="currentColor" text-anchor="middle">expected counts, eq. (11)</text>
+  <text x="350" y="291" font-size="10" fill="currentColor" text-anchor="middle">the only interface between steps</text>
+
+  <rect x="15" y="120" width="185" height="60" rx="4" fill="none" stroke="currentColor"/>
+  <text x="107" y="141" font-size="12" fill="currentColor" text-anchor="middle">M-step</text>
+  <text x="107" y="157" font-size="10" fill="currentColor" text-anchor="middle">one small fit per item</text>
+  <text x="107" y="171" font-size="10" fill="currentColor" text-anchor="middle">eq. (12), independent</text>
+
+  <!-- cycle arrows -->
+  <path d="M 445 41 C 540 41 592 70 592 116" fill="none" stroke="currentColor" marker-end="url(#e1)"/>
+  <path d="M 592 180 C 592 226 500 270 449 270" fill="none" stroke="currentColor" marker-end="url(#e1)"/>
+  <path d="M 255 270 C 200 270 107 226 107 184" fill="none" stroke="currentColor" marker-end="url(#e1)"/>
+  <path d="M 107 120 C 107 70 165 41 251 41" fill="none" stroke="currentColor" marker-end="url(#e1)"/>
+
+  <!-- convergence exit -->
+  <text x="350" y="120" font-size="11" fill="currentColor" text-anchor="middle">repeat until</text>
+  <text x="350" y="137" font-size="11" fill="currentColor" text-anchor="middle">max |Δu| &lt; 10⁻⁴</text>
+  <text x="350" y="160" font-size="10" fill="var(--accent)" text-anchor="middle">or 500 cycles →</text>
+  <text x="350" y="175" font-size="10" fill="var(--accent)" text-anchor="middle">FAILED, no parameters</text>
+</svg>
+<figcaption>One EM cycle. The expected counts <var>r</var> are the only thing passed from the E-step to the M-step, which is what decouples the items: the M-step never sees a respondent, only a table of how much expected mass chose each category at each ability node.</figcaption>
+</figure>
+
+<h3>The variants for shared and fixed slopes</h3>
+
+<p>Two families break the clean per-item decomposition, and the code handles each explicitly:</p>
+
+<ul>
+  <li><strong>1PL</strong> shares one discrimination across all items, so that parameter appears in every item’s term and cannot be optimised item-by-item. <code>_m_step_shared_slope</code> optimises the common slope over the summed objective, then the difficulties given it.</li>
+  <li><strong>Rasch and PCM</strong> fix the slope at 1 and estimate the population variance instead. That is an M-step for the distribution rather than for an item, and it has a closed form — the posterior-weighted second moment of the nodes:
+    <div class="eq eq-left">
+    <var>n<sub>k</sub></var> <span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>i</var></sub> <var>p<sub>ik</sub></var>,
+    <span style="padding-left:1em"><var>σ</var>² <span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>k</var></sub> <var>n<sub>k</sub></var> <var>θ<sub>k</sub></var>² <span class="op">/</span> <span style="font-size:1.2em">∑</span><sub><var>k</var></sub> <var>n<sub>k</sub></var></span>
+    <span class="tag">(13)</span>
+    </div>
+    with the mean held at zero for identification. The new <var>σ</var> reweights the quadrature prior for the next cycle. This <var>σ</var> is the “latent standard deviation” that must travel with a Rasch fit to every downstream statistic.</li>
+</ul>
+
+<h2>Convergence, and what happens when it does not</h2>
+
+<p>Each cycle, the largest absolute change across all parameters is compared with a tolerance of 10<sup>−4</sup>:</p>
+
+<div class="eq">
+max<sub><var>parameters</var></sub> <span class="op">|</span><var>u</var><sup>(<var>t</var>)</sup> <span class="op">−</span> <var>u</var><sup>(<var>t</var>−1)</sup><span class="op">|</span> <span class="op">&lt;</span> 10<sup>−4</sup>
+</div>
+
+<p>A secondary criterion catches the case where parameters still drift but the likelihood has stopped improving (a gain below 10<sup>−9</sup>), which is recorded as a note. The cap is 500 cycles.</p>
+
+<div class="box box-warn">
+<h4>Why non-convergence yields nothing at all</h4>
+<p>If the cap is reached, IRTBoss returns a result with <code>converged = False</code>, a failure reason, and <strong>no parameters, no log-likelihood, no AIC or BIC</strong>. This propagates: the orchestrator records a failed diagnostic as a failure, the worker stores the run as FAILED, and the report refuses to render a document.</p>
+<p>The reasoning is that the last iterate of a non-converged EM run is not an approximate answer. EM increases the likelihood every cycle, so a run that has not converged is somewhere on a path, and where it stopped is determined by the iteration cap rather than by the data. Its parameters are not “roughly right with larger standard errors” — the standard errors themselves are computed at a point that is not a maximum, so they describe curvature at an arbitrary location. Reporting them with a warning invites exactly the misuse that a hard failure prevents. In this project’s history, storing partial results as successes was a real defect, catalogued in <a href="../v2/PROBLEMS.md">PROBLEMS.md</a>.</p>
+<p>What to do when it happens: reduce model complexity (3PL → 2PL), check for items with almost no variance, check sample size, and look at the validation notes for near-empty categories.</p>
+</div>
+
+<h2>Missing responses</h2>
+
+<p>Real data has gaps. IRTBoss handles them at the level of the individual cell, with no imputation:</p>
+
+<ul>
+  <li>In the pattern likelihood, a missing cell simply contributes no factor to the product in (1). A respondent who skipped item 7 still gets a posterior, computed from the items they did answer.</li>
+  <li>In the accumulators (11), that respondent contributes to every other item’s counts but not to item 7’s.</li>
+</ul>
+
+<p>This is <strong>full-information maximum likelihood</strong>, valid when data are missing at random. It is strictly better than the common alternatives: deleting incomplete rows discards information and can bias the sample, and scoring missing responses as wrong asserts something the data did not say. The sentinel is <code>MISSING = -1</code> and the behaviour is covered by the Tier 1 validation tests.</p>
+
+<h2>Standard errors</h2>
+
+<p>A parameter without a standard error is not a measurement. Getting them requires the curvature of the marginal log-likelihood at the maximum — but we never formed that function directly, only the Q function. The route around this is elegant enough to be worth following.</p>
+
+<h3>The Fisher identity</h3>
+
+<p>Differentiate the marginal likelihood (3) for one respondent, and push the derivative inside the integral:</p>
+
+<div class="eq eq-left">
+∂ ln <var>L<sub>i</sub></var> / ∂<var>φ</var>
+<span class="op">=</span> (1 <span class="op">/</span> <var>L<sub>i</sub></var>) ∂/∂<var>φ</var> ∫ <var>P</var>(<b>x</b><sub><var>i</var></sub><span class="op">|</span><var>θ</var>) <var>g</var>(<var>θ</var>) d<var>θ</var>
+<br><br>
+<span class="op">=</span> ∫ [ ∂ ln <var>P</var>(<b>x</b><sub><var>i</var></sub><span class="op">|</span><var>θ</var>) / ∂<var>φ</var> ] <span class="op">·</span> <var>P</var>(<b>x</b><sub><var>i</var></sub><span class="op">|</span><var>θ</var>) <var>g</var>(<var>θ</var>) <span class="op">/</span> <var>L<sub>i</sub></var> d<var>θ</var>
+<br><br>
+<span class="op">=</span> <span style="font-size:1.2em">𝔼</span><sub><var>θ</var> <span class="op">|</span> <b>x</b><sub><var>i</var></sub></sub> [ ∂ ln <var>P</var>(<b>x</b><sub><var>i</var></sub><span class="op">|</span><var>θ</var>) / ∂<var>φ</var> ]
+<span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>k</var></sub> <var>p<sub>ik</sub></var> ∂ ln <var>P</var>(<b>x</b><sub><var>i</var></sub><span class="op">|</span><var>θ<sub>k</sub></var>) / ∂<var>φ</var>
+<span class="tag">(14)</span>
+</div>
+
+<p>The middle step recognises the posterior (8) hiding in the integrand. The result — the <strong>Fisher identity</strong> — says the gradient of the thing we could not compute is the posterior-weighted average of the gradient of the thing we can. And the posterior is already sitting in memory from the E-step.</p>
+
+<h3>The cross-product (BHHH) information matrix</h3>
+
+<p>Call the per-respondent gradient in (14) the <strong>score</strong>, <var>s<sub>i</sub></var>. At the maximum the scores sum to zero, but their outer products do not, and they estimate the information:</p>
+
+<div class="eq">
+<var>I</var>(<var>φ</var>) <span class="op">≈</span> <span style="font-size:1.3em">∑</span><sub><var>i</var></sub> <var>s<sub>i</sub></var> <var>s<sub>i</sub></var><sup>⊤</sup>,
+<span style="padding-left:1em">Cov(<var>φ̂</var>) <span class="op">=</span> <var>I</var>(<var>φ</var>)<sup>−1</sup></span>
+<span class="tag">(15)</span>
+</div>
+
+<p>This is the Berndt–Hall–Hall–Hausman estimator. It needs only first derivatives, and standard errors are the square roots of the diagonal of the inverse.</p>
+
+<div class="box box-code">
+<h4>How the derivatives are taken, and why numerically — <code>_attach_standard_errors</code></h4>
+<p>The gradients ∂ ln <var>P<sub>jc</sub></var>/∂<var>u</var> are computed by central differences with a step of 10<sup>−5</sup>:</p>
+<div class="eq eq-left">
+∂<var>f</var>/∂<var>u<sub>t</sub></var> <span class="op">≈</span> [ <var>f</var>(<var>u</var> <span class="op">+</span> <var>h</var><b>e</b><sub><var>t</var></sub>) <span class="op">−</span> <var>f</var>(<var>u</var> <span class="op">−</span> <var>h</var><b>e</b><sub><var>t</var></sub>) ] <span class="op">/</span> 2<var>h</var>,
+<span style="padding-left:0.8em"><var>h</var> = 10<sup>−5</sup></span>
+</div>
+<p>Central differences have truncation error of order <var>h</var>², so about 10<sup>−10</sup> here — orders of magnitude below the sampling error these standard errors are describing. The alternative, hand-deriving analytic gradients for seven families, is seven chances to make an algebra error that produces plausible wrong numbers, and no test would catch it. Each derivative costs two evaluations of a small array function. The code states this trade-off explicitly in its docstring.</p>
+<p>Two safeguards follow. A ridge proportional to the matrix scale (trace/<var>n</var> × 10<sup>−10</sup>) is added before inversion, so a near-singular information matrix inverts without materially changing well-identified standard errors. If any resulting variance is negative, the code raises rather than returning the square root of a negative number as <code>nan</code>.</p>
+</div>
+
+<h3>The delta method: getting back to interpretable units</h3>
+
+<p>The covariance matrix from (15) is on the <em>unconstrained</em> scale — variances of log <var>a</var>, of logit <var>c</var>, of the log increments between GRM boundaries. Nobody wants the standard error of a log slope. The delta method transforms them.</p>
+
+<p>For a smooth transformation <var>h</var> of the parameters, the first-order Taylor expansion gives</p>
+
+<div class="eq">
+Var(<var>h</var>(<var>û</var>)) <span class="op">≈</span> <var>J</var> <span class="op">·</span> Cov(<var>û</var>) <span class="op">·</span> <var>J</var><sup>⊤</sup>,
+<span style="padding-left:1em"><var>J</var> <span class="op">=</span> ∂<var>h</var>/∂<var>u</var></span>
+<span class="tag">(16)</span>
+</div>
+
+<p>The scalar cases are worth committing to memory, because they let you sanity-check any output:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Natural parameter</th><th>Stored as</th><th>Jacobian</th><th>Standard error</th></tr></thead>
+<tbody>
+<tr><td>Discrimination <var>a</var></td><td><var>u</var> = ln <var>a</var></td><td>∂<var>a</var>/∂<var>u</var> = <var>a</var></td><td>SE(<var>a</var>) = <var>a</var> · SE(ln <var>a</var>)</td></tr>
+<tr><td>Guessing <var>c</var></td><td><var>u</var> = logit <var>c</var></td><td><var>c</var>(1−<var>c</var>)</td><td>SE(<var>c</var>) = <var>c</var>(1−<var>c</var>) · SE(logit <var>c</var>)</td></tr>
+<tr><td>Difficulty <var>b</var></td><td><var>b</var> directly</td><td>1</td><td>unchanged</td></tr>
+<tr><td>GRM boundaries <var>b<sub>k</sub></var></td><td><var>b</var><sub>1</sub> + Σ e<sup><var>u</var></sup></td><td>lower-triangular of 1s and e<sup><var>u</var></sup></td><td>needs the full matrix form (16)</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>The first row has a consequence worth noticing: because SE(<var>a</var>) is proportional to <var>a</var> itself, highly discriminating items always have larger absolute standard errors on their discrimination. That is not instability, it is the multiplicative scale — the <em>relative</em> precision is what to compare.</p>
+
+<div class="box box-warn">
+<h4>A limitation the code documents about itself</h4>
+<p>For Rasch and PCM, the estimated latent variance is not included in the information matrix. The item standard errors there are therefore very slightly optimistic, because they treat <var>σ</var> as known when it was estimated from the same data. The docstring of <code>_attach_standard_errors</code> states this. It is small in practice and it is recorded rather than hidden — which is the pattern to expect throughout this codebase.</p>
+</div>
+
+<h2>Numerical safeguards, and why each exists</h2>
+
+<p>Statistical code fails in specific, repeatable ways. Four defences appear in this engine, and each maps to a real failure mode:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Safeguard</th><th>Where</th><th>Failure it prevents</th></tr></thead>
+<tbody>
+<tr><td>Probabilities clipped to [10<sup>−12</sup>, 1]</td><td><code>_EPS</code>, every family</td><td>A near-impossible response gives ln 0 = −∞, which poisons the entire likelihood with a single cell</td></tr>
+<tr><td>Log-sum-exp with peak subtraction</td><td>E-step</td><td>Products over 50 items underflow to exactly 0 in double precision, making the posterior 0/0</td></tr>
+<tr><td>Softmax stabilisation (subtract row max)</td><td><code>_PartialCredit.probabilities</code></td><td>e<sup>ψ</sup> overflows to ∞ for large ψ, then ∞/∞</td></tr>
+<tr><td>Response-pattern compression</td><td><code>_compress</code></td><td>Not a correctness issue but a large speed-up: identical patterns share one posterior, weighted by their count. On dichotomous data with few items, duplicate patterns are the norm</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Starting values matter too. Rather than starting every item at <var>a</var> = 1, <var>b</var> = 0, the engine uses the normal-ogive approximation <var>b</var> ≈ −logit(<var>p</var>)/1.7 from each item’s observed proportion correct, which places each item near its eventual difficulty and cuts the number of cycles substantially. (The 1.7 is the classical constant relating logistic and normal-ogive metrics.)</p>
+
+<h2>The whole algorithm, in one place</h2>
+
+<pre><code>quad ← 61 nodes on [−6, +6], weights = normal density, normalised
+patterns, counts ← compress(responses)          # identical rows collapsed
+u_j ← initial values from each item's observed proportions
+σ ← 1;  prior ← quad.weights
+
+repeat for cycle = 1 … 500:
+
+    # ---- E-step ----
+    log P_j(·|θ_k) ← family.log_probabilities(θ, u_j)      for every item
+    log P(x_i|θ_k) ← Σ_j log P_j(x_ij|θ_k)                 # missing cells skipped
+    joint         ← log P(x_i|θ_k) + log prior_k
+    log L_i       ← logsumexp_k(joint)                     # peak-subtracted
+    p_ik          ← exp(joint − log L_i)                   # eq. (8)
+    ℓ             ← Σ_i counts_i · log L_i                 # eq. (6)
+    r_jkc         ← Σ_i counts_i · p_ik · 1[x_ij = c]       # eq. (11)
+
+    # ---- M-step ----
+    for each item j:  u_j ← argmax  Σ_k Σ_c r_jkc log P_jc(θ_k; u_j) + log prior(u_j)
+    if slope is SHARED:   optimise the common slope over the summed objective
+    if slope is FIXED:    σ² ← Σ_k n_k θ_k² / Σ_k n_k;  prior ← reweight(σ)
+
+    # ---- convergence ----
+    if max|u − u_prev| &lt; 1e−4:            converged; break
+    if |Δℓ| &lt; 1e−9 and cycle &gt; 1:         converged, with a note; break
+
+if not converged:  return FAILED with a reason and NO parameters
+
+covariance ← inv(Σ_i counts_i · s_i s_iᵀ + ridge)          # eq. (14), (15)
+transform parameters and standard errors to the natural scale  # eq. (16)
+return parameters, standard errors, ℓ, free parameter count, σ</code></pre>
+
+<h2>How anyone knows this is right</h2>
+
+<p>An estimator that converges is not an estimator that is correct. IRTBoss checks itself two ways, described fully in Part 10:</p>
+
+<ul>
+  <li><strong>Parameter recovery (Tier 1).</strong> Simulate data from known parameters with <code>app/irt/simulate.py</code>, fit it, and check the estimates return the truth within tolerance — for all seven families. Also checks that reported standard errors match the empirical spread of estimates across repeated simulations, which is the only way to test whether a standard error is honest. Runs on every push.</li>
+  <li><strong>Agreement with R <code>mirt</code> (Tier 2).</strong> Fit committed fixture datasets in both implementations and compare parameters, log-likelihood and free-parameter count. As Part 2 notes, this harness exists and has not yet executed; PROGRESS.md records that plainly.</li>
+</ul>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>Joint estimation of items and people fails because of the incidental parameters problem; marginalising the abilities away fixes it.</li>
+  <li>Quadrature turns the integral into a 61-point weighted sum with negligible error.</li>
+  <li>EM alternates between a posterior over the grid (E-step) and independent per-item fits (M-step); the sum swap in (10) is what decouples the items and makes it scale.</li>
+  <li>Rasch and PCM estimate the population SD in the M-step; the 1PL ties one slope across items.</li>
+  <li>Non-convergence returns nothing, deliberately, because the last iterate of an unfinished run is an artefact of the iteration cap.</li>
+  <li>Missing data is skipped per cell — full information, no imputation.</li>
+  <li>Standard errors come from the Fisher identity plus a cross-product information matrix, with numerical derivatives, then a delta-method transform back to interpretable units.</li>
+</ul>
+
+<nav class="pager">
+  <a href="03-models.html"><span class="lbl">Previous</span>← Part 3 · The models</a>
+  <a href="05-scoring-precision.html"><span class="lbl">Next</span>Part 5 · Scoring and precision →</a>
+</nav>
+
+</div>
+</body>
+</html>

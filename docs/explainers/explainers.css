@@ -1,0 +1,354 @@
+/* IRTBoss explainers — shared stylesheet.
+ *
+ * These pages are read from disk, so this file is linked relatively rather than
+ * inlined thirteen times. Colours are declared as tokens on bare :root and
+ * redefined for dark, so a page opened in either theme is legible; nothing is
+ * defined only inside a media query.
+ */
+
+:root {
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --surface-2: #f3f1ed;
+  --ink: #1c1a17;
+  --ink-2: #4a463f;
+  --ink-3: #6f6a61;
+  --rule: #ddd8cf;
+  --rule-2: #c8c2b6;
+  --accent: #7a4b1e;
+  --accent-bg: #f6ede2;
+  --math-bg: #f5f2ec;
+  --warn: #8a3a12;
+  --warn-bg: #fbeee6;
+  --code-bg: #f1efe9;
+  --track-user: #1f5c4a;
+  --track-maint: #2b4a7a;
+  --track-stake: #6b3a6b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16150f;
+    --surface: #1e1d16;
+    --surface-2: #26241c;
+    --ink: #ece8de;
+    --ink-2: #c3bdb0;
+    --ink-3: #948d80;
+    --rule: #35332a;
+    --rule-2: #4a473c;
+    --accent: #e0a86a;
+    --accent-bg: #2a2318;
+    --math-bg: #221f18;
+    --warn: #eda37a;
+    --warn-bg: #2c1f16;
+    --code-bg: #24221b;
+    --track-user: #7fc9ae;
+    --track-maint: #92b6e8;
+    --track-stake: #ccA0cc;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #16150f;
+  --surface: #1e1d16;
+  --surface-2: #26241c;
+  --ink: #ece8de;
+  --ink-2: #c3bdb0;
+  --ink-3: #948d80;
+  --rule: #35332a;
+  --rule-2: #4a473c;
+  --accent: #e0a86a;
+  --accent-bg: #2a2318;
+  --math-bg: #221f18;
+  --warn: #eda37a;
+  --warn-bg: #2c1f16;
+  --code-bg: #24221b;
+  --track-user: #7fc9ae;
+  --track-maint: #92b6e8;
+  --track-stake: #cca0cc;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Charter, Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 18px;
+  line-height: 1.62;
+}
+
+.wrap {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 5rem;
+}
+
+/* --- masthead and navigation ------------------------------------------- */
+
+.masthead {
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 2.5rem;
+  padding-bottom: 1rem;
+}
+
+.masthead a { color: var(--ink-3); }
+
+.kicker {
+  font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 0.35rem;
+}
+
+h1 {
+  font-size: 2.05rem;
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+  margin: 0 0 0.6rem;
+}
+
+h2 {
+  font-size: 1.42rem;
+  line-height: 1.25;
+  margin: 3rem 0 0.9rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--rule);
+}
+
+h3 {
+  font-size: 1.1rem;
+  margin: 2rem 0 0.6rem;
+}
+
+h4 {
+  font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 1.6rem 0 0.5rem;
+}
+
+p { margin: 0 0 1.1rem; }
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+.lede {
+  font-size: 1.14rem;
+  color: var(--ink-2);
+  margin-bottom: 1.6rem;
+}
+
+/* --- reading-track badges --------------------------------------------- */
+
+.tracks { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 1.4rem; padding: 0; list-style: none; }
+
+.track {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  border-radius: 100px;
+  padding: 0.16rem 0.6rem;
+}
+
+.track-user { color: var(--track-user); }
+.track-maint { color: var(--track-maint); }
+.track-stake { color: var(--track-stake); }
+
+/* --- boxes ------------------------------------------------------------ */
+
+.box {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-2);
+  border-radius: 3px;
+  padding: 1rem 1.1rem 0.3rem;
+  margin: 1.6rem 0;
+  font-size: 0.95rem;
+}
+
+.box > h4 { margin-top: 0; }
+.box > :last-child { margin-bottom: 0.7rem; }
+
+.box-math { background: var(--math-bg); border-left-color: var(--accent); }
+.box-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.box-warn > h4 { color: var(--warn); }
+.box-code { background: var(--code-bg); border-left-color: var(--track-maint); }
+.box-code > h4 { color: var(--track-maint); }
+
+/* --- mathematics ------------------------------------------------------ */
+
+.eq {
+  display: block;
+  overflow-x: auto;
+  background: var(--math-bg);
+  border-radius: 3px;
+  padding: 0.85rem 1rem;
+  margin: 1.2rem 0;
+  font-family: "Cambria Math", Cambria, Charter, Georgia, serif;
+  font-size: 1.03rem;
+  line-height: 1.9;
+  text-align: center;
+}
+
+.eq-left { text-align: left; }
+
+.eq .tag { float: right; color: var(--ink-3); font-size: 0.85rem; font-family: ui-sans-serif, sans-serif; }
+
+var, .v { font-style: italic; font-family: "Cambria Math", Cambria, Georgia, serif; }
+
+.op { font-style: normal; padding: 0 0.15em; }
+
+.steps { counter-reset: step; list-style: none; padding: 0; margin: 1.2rem 0; }
+
+.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 2.4rem;
+  margin-bottom: 1.1rem;
+}
+
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 1px solid var(--rule-2);
+  border-radius: 50%;
+  color: var(--ink-3);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.8rem;
+  display: grid;
+  place-items: center;
+}
+
+/* --- code ------------------------------------------------------------- */
+
+code, kbd, samp {
+  font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  font-size: 0.86em;
+  background: var(--code-bg);
+  padding: 0.1em 0.32em;
+  border-radius: 3px;
+}
+
+pre {
+  overflow-x: auto;
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.9rem 1rem;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+pre code { background: none; padding: 0; font-size: 1em; }
+
+/* --- tables ----------------------------------------------------------- */
+
+.scroll { overflow-x: auto; margin: 1.4rem 0; }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+th {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--rule-2);
+  white-space: nowrap;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+
+td code { white-space: nowrap; }
+
+/* --- figures ---------------------------------------------------------- */
+
+figure { margin: 1.8rem 0; }
+
+figure svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+figcaption {
+  font-size: 0.86rem;
+  color: var(--ink-3);
+  margin-top: 0.7rem;
+  padding-left: 0.2rem;
+  border-left: 2px solid var(--rule);
+  padding-left: 0.7rem;
+}
+
+/* --- lists ------------------------------------------------------------ */
+
+ul, ol { padding-left: 1.4rem; margin: 0 0 1.1rem; }
+li { margin-bottom: 0.4rem; }
+
+dl.gloss dt { font-weight: 600; margin-top: 1.1rem; }
+dl.gloss dd { margin: 0.2rem 0 0; color: var(--ink-2); }
+
+.refs { font-size: 0.9rem; }
+.refs li { margin-bottom: 0.7rem; }
+
+/* --- contents and pager ----------------------------------------------- */
+
+.toc { list-style: none; padding: 0; }
+
+.toc > li {
+  border-bottom: 1px solid var(--rule);
+  padding: 0.9rem 0;
+}
+
+.toc .n {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+
+.toc a { font-size: 1.08rem; text-decoration: none; display: block; margin: 0.15rem 0; }
+.toc a:hover { text-decoration: underline; }
+.toc p { margin: 0.2rem 0 0; font-size: 0.92rem; color: var(--ink-2); }
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 3.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.9rem;
+}
+
+.pager a { text-decoration: none; }
+.pager .lbl { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); }
+
+blockquote {
+  margin: 1.4rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--rule-2);
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+hr { border: none; border-top: 1px solid var(--rule); margin: 2.5rem 0; }
+
+.small { font-size: 0.88rem; color: var(--ink-3); }

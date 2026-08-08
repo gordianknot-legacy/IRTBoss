@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 7 · Differential item functioning</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 7 of 12</p>
+  <h1>Differential item functioning: when an item is unfair</h1>
+  <ul class="tracks">
+    <li class="track track-user">Analyst</li>
+  </ul>
+  <p class="lede">Three methods for asking whether an item behaves differently for two groups of equal ability — and one distinction that no statistic can make for you, which is why the tool calls this a screen rather than a verdict.</p>
+</header>
+
+<h2>The question, and the question it is not</h2>
+
+<p><strong>Differential item functioning</strong> asks: do two respondents of the same ability, drawn from different groups, have the same chance of answering this item correctly? If not, the item is measuring something besides the trait — something that varies by group.</p>
+
+<p>It is emphatically <em>not</em> the question of whether the groups score differently overall. That is <strong>impact</strong>, and it is usually a fact about the world rather than a defect in the item. If one group has had less schooling, they will score lower on a well-constructed test, and every item will show a group difference in raw terms. Flagging every item in that situation would be useless.</p>
+
+<p>So every method here <strong>conditions on ability first</strong>, and then compares groups. They differ in what they condition on and in what they can see.</p>
+
+<div class="box box-warn">
+<h4>The distinction the statistics cannot make</h4>
+<p>DIF tells you an item behaves differently. It cannot tell you whether that difference is <em>bias</em>. Consider a maths word problem set in a cricket context, flagged as favouring one group. Two readings:</p>
+<ul>
+  <li><strong>Bias.</strong> Familiarity with cricket is irrelevant to mathematics, so the item is measuring something it should not, and it should be revised.</li>
+  <li><strong>Legitimate difficulty.</strong> If the construct is explicitly “applying mathematics to everyday contexts” and cricket is a chosen context, the difference may be part of what is being measured.</li>
+</ul>
+<p>Deciding requires knowing what the item is asking and what the test claims to measure — which no statistic in the report can see. IRTBoss states this in the notes attached to every DIF analysis, in words that appear verbatim in the output: <em>“DIF results are a screen, not a verdict. An item flagged here behaves differently between groups conditional on the trait; deciding whether that difference is bias requires knowing what the item is asking, which no statistic in this report can see.”</em></p>
+</div>
+
+<h2>Two shapes of DIF</h2>
+
+<p>The distinction between them decides which method can detect what.</p>
+
+<figure>
+<svg viewBox="0 0 700 250" role="img" aria-label="Two panels. Left: uniform DIF, two parallel curves where the focal group's curve is shifted right so the item is harder for them at every ability. Right: non-uniform DIF, two curves that cross at theta zero, so the item favours the focal group below the crossing point and the reference group above it.">
+  <!-- panel 1 -->
+  <line x1="60" y1="210" x2="315" y2="210" stroke="currentColor"/>
+  <line x1="60" y1="210" x2="60" y2="35" stroke="currentColor"/>
+  <text x="187" y="232" font-size="11" fill="currentColor" text-anchor="middle">ability θ</text>
+  <text x="187" y="24" font-size="12" fill="currentColor" text-anchor="middle">Uniform DIF</text>
+  <polyline fill="none" stroke="currentColor" stroke-width="1.8" points="60,199.3 68,197.1 77,194.5 85,191.5 93,187.9 102,183.7 110,179.0 118,173.6 127,167.5 135,160.9 143,153.6 152,145.8 160,137.7 168,129.2 177,120.8 185,112.3 193,104.2 202,96.4 210,89.1 218,82.5 227,76.4 235,71.0 243,66.3 252,62.1 260,58.5 268,55.5 277,52.9 285,50.7 293,48.9 302,47.3 310,46.0"/>
+  <polyline fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-dasharray="5 3" points="60,205.0 68,204.0 77,202.7 85,201.1 93,199.3 102,197.1 110,194.5 118,191.5 127,187.9 135,183.7 143,179.0 152,173.6 160,167.5 168,160.9 177,153.6 185,145.8 193,137.7 202,129.2 210,120.8 218,112.3 227,104.2 235,96.4 243,89.1 252,82.5 260,76.4 268,71.0 277,66.3 285,62.1 293,58.5 302,55.5 310,52.9"/>
+  <text x="150" y="80" font-size="10" fill="currentColor">reference</text>
+  <text x="228" y="130" font-size="10" fill="var(--accent)">focal</text>
+  <text x="187" y="248" font-size="10" fill="currentColor" text-anchor="middle">harder for the focal group everywhere</text>
+
+  <!-- panel 2 -->
+  <line x1="410" y1="210" x2="665" y2="210" stroke="currentColor"/>
+  <line x1="410" y1="210" x2="410" y2="35" stroke="currentColor"/>
+  <text x="537" y="232" font-size="11" fill="currentColor" text-anchor="middle">ability θ</text>
+  <text x="537" y="24" font-size="12" fill="currentColor" text-anchor="middle">Non-uniform DIF</text>
+  <polyline fill="none" stroke="currentColor" stroke-width="1.8" points="410,209.2 418,208.9 427,208.4 435,207.8 443,206.8 452,205.5 460,203.6 468,201.0 477,197.3 485,192.4 493,185.9 502,177.4 510,166.9 518,154.3 527,140.1 535,125.0 543,109.9 552,95.7 560,83.1 568,72.6 577,64.1 585,57.6 593,52.7 602,49.0 610,46.4 618,44.5 627,43.2 635,42.2 643,41.6 652,41.1 660,40.8"/>
+  <polyline fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-dasharray="5 3" points="410,185.9 418,183.3 427,180.5 435,177.4 443,174.2 452,170.6 460,166.9 468,162.9 477,158.7 485,154.3 493,149.8 502,145.0 510,140.1 518,135.2 527,130.1 535,125.0 543,119.9 552,114.8 560,109.9 568,105.0 577,100.2 585,95.7 593,91.3 602,87.1 610,83.1 618,79.4 627,75.8 635,72.6 643,69.5 652,66.7 660,64.1"/>
+  <circle cx="535" cy="125" r="3.5" fill="none" stroke="currentColor"/>
+  <text x="537" y="248" font-size="10" fill="currentColor" text-anchor="middle">advantage reverses at the crossing point</text>
+</svg>
+<figcaption>Left: the curves are parallel, so one group is disadvantaged at every ability level — this is uniform DIF, a difference in difficulty. Right: the curves cross, so the item favours the focal group below the crossing and the reference group above it — non-uniform DIF, a difference in discrimination. Averaged over the whole scale, the right-hand case can look like no difference at all, which is exactly the trap the next section describes.</figcaption>
+</figure>
+
+<h2>Method one: Mantel–Haenszel</h2>
+
+<p>Stratify respondents by their observed total score. Within each stratum — people who scored the same — build a 2×2 table of group by right/wrong, and pool the odds ratios across strata:</p>
+
+<div class="eq">
+<var>α̂</var><sub>MH</sub> <span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>s</var></sub> (<var>A<sub>s</sub></var><var>D<sub>s</sub></var> <span class="op">/</span> <var>n<sub>s</sub></var>) <span class="op">/</span> <span style="font-size:1.2em">∑</span><sub><var>s</var></sub> (<var>B<sub>s</sub></var><var>C<sub>s</sub></var> <span class="op">/</span> <var>n<sub>s</sub></var>)
+<span class="tag">(1)</span>
+</div>
+
+<p>where <var>A<sub>s</sub></var>, <var>B<sub>s</sub></var>, <var>C<sub>s</sub></var>, <var>D<sub>s</sub></var> are the four cell counts in stratum <var>s</var>. An odds ratio of 1 means no DIF. ETS converts it to a difficulty-difference metric:</p>
+
+<div class="eq">
+Δ<sub>MH</sub> <span class="op">=</span> <span class="op">−</span>2.35 <span class="op">·</span> ln <var>α̂</var><sub>MH</sub>
+<span class="tag">(2)</span>
+</div>
+
+<p>The 2.35 puts the result on the ETS delta scale, where a positive value conventionally indicates the item is easier for the focal group. This feeds the <strong>A/B/C classification</strong>, which combines statistical significance with effect size — the taxonomy used operationally in large-scale testing:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Category</th><th>Broad criterion</th><th>Operational meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>A</strong> — negligible</td><td>Not significant, or |Δ<sub>MH</sub>| small</td><td>Use the item</td></tr>
+<tr><td><strong>B</strong> — moderate</td><td>Significant with a moderate |Δ<sub>MH</sub>|</td><td>Usable; prefer an A-category item if one is available</td></tr>
+<tr><td><strong>C</strong> — large</td><td>Significant with a large |Δ<sub>MH</sub>|</td><td>Review the content before use; strong candidate for revision</td></tr>
+</tbody>
+</table>
+</div>
+
+<p class="small">The exact numeric cut-points are conventions from the ETS procedure rather than derived constants; the tool applies the conjunction of a significance test and an effect-size band, and reports both components so you can apply your own bands if your programme uses different ones.</p>
+
+<p><strong>Its great strength:</strong> no model is fitted, so nothing about the model can be wrong. If your 2PL fit is questionable, Mantel–Haenszel is unaffected.</p>
+
+<div class="box box-warn">
+<h4>Its blind spot, and why it matters</h4>
+<p>Mantel–Haenszel is <strong>blind to non-uniform DIF</strong>. Look again at the right-hand panel of the figure: below the crossing point the focal group is favoured, above it the reference group is. The stratum-specific odds ratios point in opposite directions, and pooling them averages the two away — landing near 1. <strong>An item can be badly non-uniform and score a clean ETS A.</strong> This is not a subtle inefficiency; it is a whole category of unfairness that the operational standard cannot see, and it is the reason the next method is reported alongside rather than instead.</p>
+</div>
+
+<h2>Method two: logistic regression</h2>
+
+<p>Swaminathan &amp; Rogers’ approach fits a sequence of nested logistic models predicting the response from the matching score, the group, and their interaction:</p>
+
+<div class="eq eq-left">
+Model 1: logit(<var>P</var>) <span class="op">=</span> <var>β</var><sub>0</sub> <span class="op">+</span> <var>β</var><sub>1</sub><var>S</var>
+<br>
+Model 2: logit(<var>P</var>) <span class="op">=</span> <var>β</var><sub>0</sub> <span class="op">+</span> <var>β</var><sub>1</sub><var>S</var> <span class="op">+</span> <var>β</var><sub>2</sub><var>G</var>
+<span style="padding-left:1em" class="small">uniform DIF</span>
+<br>
+Model 3: logit(<var>P</var>) <span class="op">=</span> <var>β</var><sub>0</sub> <span class="op">+</span> <var>β</var><sub>1</sub><var>S</var> <span class="op">+</span> <var>β</var><sub>2</sub><var>G</var> <span class="op">+</span> <var>β</var><sub>3</sub>(<var>S</var> <span class="op">×</span> <var>G</var>)
+<span style="padding-left:1em" class="small">non-uniform DIF</span>
+<span class="tag">(3)</span>
+</div>
+
+<p>with <var>S</var> the matching score and <var>G</var> the group indicator. A significant <var>β</var><sub>2</sub> indicates uniform DIF; a significant <var>β</var><sub>3</sub> indicates non-uniform DIF. <strong>That interaction term is exactly what Mantel–Haenszel cannot see</strong>, which is the reason both are reported.</p>
+
+<h3>The effect size, and why it governs</h3>
+
+<p>IRTBoss flags on the change in <strong>McFadden’s pseudo-<var>R</var>²</strong> between models, not on the <var>p</var>-value:</p>
+
+<div class="eq">
+<var>R</var>²<sub>McF</sub> <span class="op">=</span> 1 <span class="op">−</span> <var>ℓ</var><sub>model</sub> <span class="op">/</span> <var>ℓ</var><sub>null</sub>,
+<span style="padding-left:1em">Δ<var>R</var>²<sub>McF</sub> <span class="op">=</span> <var>R</var>²<sub>full</sub> <span class="op">−</span> <var>R</var>²<sub>reduced</sub></span>
+<span class="tag">(4)</span>
+</div>
+
+<p>The reason is the same one from Part 6: with a few thousand respondents the likelihood-ratio test will find statistically real differences far too small to matter to anyone. The <var>p</var>-value is reported next to the effect size, not instead of it. The effect-size convention follows the <code>lordif</code> literature.</p>
+
+<div class="box box-warn">
+<h4>Its weakness</h4>
+<p>Logistic-regression DIF shares Mantel–Haenszel’s reliance on the <strong>observed</strong> total score as the matching variable. That score is measured with error, and under substantial impact the error is correlated with group membership — which inflates the Type I error rate. In plain terms: when the groups genuinely differ a lot in ability, both observed-score methods flag items that are fine. The next method addresses precisely this.</p>
+</div>
+
+<h2>Method three: IRT likelihood ratio</h2>
+
+<p>Thissen, Steinberg &amp; Wainer’s method matches on the <em>latent</em> trait instead of a fallible observed score. For the studied item, fit two models:</p>
+
+<ul>
+  <li><strong>Constrained:</strong> the item’s parameters are forced equal across groups.</li>
+  <li><strong>Free:</strong> the item’s parameters may differ across groups.</li>
+</ul>
+
+<p>and compare with a likelihood-ratio statistic:</p>
+
+<div class="eq">
+<var>G</var>² <span class="op">=</span> 2 ( <var>ℓ</var><sub>free</sub> <span class="op">−</span> <var>ℓ</var><sub>constrained</sub> ) <span class="op">~</span> <var>χ</var>²<sub>df</sub>
+<span class="tag">(5)</span>
+</div>
+
+<p>with df equal to the number of parameters freed. Two advantages follow: the matching variable is the latent trait rather than a noisy score, and the result says <em>which parameter</em> differs — difficulty (uniform) or discrimination (non-uniform).</p>
+
+<h3>The anchor problem, and purification</h3>
+
+<p>To compare two groups’ item parameters at all, the two calibrations must be on a common metric, and that metric is established by the items assumed to be DIF-free — the <strong>anchor set</strong>. This creates a circularity: the anchors are supposed to be clean, but you do not know which items are clean until you have run the analysis.</p>
+
+<p>If a contaminated item is left in the anchors, the two groups are linked on a crooked metric and <strong>the contamination is smeared across every other item</strong> — you get diffuse, misleading flags everywhere rather than a clean flag on the culprit.</p>
+
+<p>The remedy is a <strong>purification loop</strong>:</p>
+
+<ol class="steps">
+  <li>Run DIF with all items as anchors.</li>
+  <li>Remove the flagged items from the anchor set.</li>
+  <li>Re-run with the reduced anchor set.</li>
+  <li>Repeat until the flagged set stops changing.</li>
+</ol>
+
+<p>IRTBoss implements this and <strong>reports the anchors actually used</strong>, which is essential: an IRT-LR result without its anchor set is uninterpretable, because a different anchor set can give a different answer on the same data.</p>
+
+<div class="box box-warn">
+<h4>A limitation specific to this implementation</h4>
+<p>The IRT-LR method here <strong>fits both groups under a single latent population distribution</strong>, so it is approximate under substantial group impact — exactly the situation where you reached for it over the observed-score methods. Where impact is large, the observed-score methods are the ones to trust, and the limitation is documented in the module and in <a href="../../PROGRESS.md">PROGRESS.md</a>. Reading this correctly matters: it means the three methods do not form a hierarchy with IRT-LR at the top. They form a triangulation.</p>
+</div>
+
+<h2>Multiple comparisons</h2>
+
+<p>A 40-item test tested for DIF is 40 hypothesis tests. At <var>α</var> = 0.05 you expect two false flags from noise alone, and a reviewer will reasonably ask about it.</p>
+
+<p>IRTBoss applies the <strong>Benjamini–Hochberg</strong> procedure across items, controlling the false discovery rate rather than the family-wise error rate. That is the right choice for a screening context: FDR control accepts a known proportion of false positives among the flagged set in exchange for far more power than Bonferroni, and since DIF flags lead to content review rather than to automatic removal, a false positive costs a reviewer’s time rather than a wrong decision.</p>
+
+<div class="box box-math">
+<h4>Benjamini–Hochberg in one step</h4>
+<p>Sort the <var>m</var> <var>p</var>-values ascending as <var>p</var><sub>(1)</sub> … <var>p</var><sub>(<var>m</var>)</sub>. Find the largest <var>k</var> such that</p>
+<div class="eq eq-left"><var>p</var><sub>(<var>k</var>)</sub> <span class="op">≤</span> (<var>k</var> <span class="op">/</span> <var>m</var>) <span class="op">·</span> <var>q</var></div>
+<p>and reject all hypotheses up to <var>k</var>. Here <var>q</var> is the target false discovery rate. Note the contrast with Bonferroni, which compares every <var>p</var>-value against <var>q</var>/<var>m</var> — the strictest possible bar, applied uniformly.</p>
+</div>
+
+<h2>Reading the three methods together</h2>
+
+<p>They are reported together because each is blind to something the others see. The disagreement patterns are informative in themselves:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>MH</th><th>Logistic</th><th>IRT-LR</th><th>Most likely reading</th></tr></thead>
+<tbody>
+<tr><td>Clean</td><td>Clean</td><td>Clean</td><td>No detectable DIF</td></tr>
+<tr><td>Flags</td><td>Flags (uniform)</td><td>Flags (difficulty)</td><td>Solid uniform DIF. Review the content</td></tr>
+<tr><td>Clean</td><td>Flags (interaction)</td><td>Flags (discrimination)</td><td>Non-uniform DIF — the case MH structurally cannot detect. Trust the other two</td></tr>
+<tr><td>Flags</td><td>Flags</td><td>Clean</td><td>Suspect observed-score matching error under large impact. Check the group ability difference</td></tr>
+<tr><td>Clean</td><td>Clean</td><td>Flags</td><td>Check the anchor set and the impact magnitude before believing it</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>A practical workflow</h3>
+
+<ol class="steps">
+  <li><strong>Check impact first.</strong> Note the ability difference between groups. Large impact changes how much you trust the observed-score methods.</li>
+  <li><strong>Read the ETS categories.</strong> C-category items are your review list. But do not stop there.</li>
+  <li><strong>Read the logistic interaction terms</strong> for anything MH missed. This is the step most often skipped and the one that catches the invisible category.</li>
+  <li><strong>Read IRT-LR with its anchor set.</strong> If the anchor set is small or the impact large, weight it less.</li>
+  <li><strong>Rank by effect size, not by <var>p</var>-value</strong>, and note the sample size.</li>
+  <li><strong>Take the flagged items to someone who knows the content.</strong> This is the step the statistics exist to serve, and it is not optional — DIF is a screen, not a verdict.</li>
+</ol>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>DIF conditions on ability then compares groups; impact — a raw group difference — is usually a fact about the world, not a defect.</li>
+  <li>Uniform DIF shifts a curve; non-uniform DIF crosses curves. Mantel–Haenszel averages the crossing case away and can score badly non-uniform items as clean.</li>
+  <li>MH needs no model, uses the ETS A/B/C conjunction of significance and effect size, and is the operational standard.</li>
+  <li>Logistic regression adds the interaction term MH cannot see, flags on ΔMcFadden <var>R</var>², and inherits observed-score matching error under large impact.</li>
+  <li>IRT-LR matches on the latent trait and identifies which parameter differs, but depends entirely on its anchor set — hence purification, and hence the anchors are reported.</li>
+  <li>This implementation of IRT-LR assumes a single latent population, so it is approximate under substantial impact; prefer the observed-score methods there.</li>
+  <li>Benjamini–Hochberg controls the false discovery rate across items, which fits a screening context.</li>
+  <li>No statistic can distinguish bias from legitimate difficulty. That requires reading the item.</li>
+</ul>
+
+<nav class="pager">
+  <a href="06-fit-assumptions.html"><span class="lbl">Previous</span>← Part 6 · Fit and assumptions</a>
+  <a href="08-comparison.html"><span class="lbl">Next</span>Part 8 · Comparing models →</a>
+</nav>
+
+</div>
+</body>
+</html>

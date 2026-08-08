@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 5 · Scoring people, and how precisely</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 5 of 12</p>
+  <h1>Scoring people, and how precisely</h1>
+  <ul class="tracks">
+    <li class="track track-user">Analyst</li>
+  </ul>
+  <p class="lede">Part 4 estimated the items. Now we place people on the scale — three ways, which disagree at the extremes for reasons you must understand before reporting anyone’s score. Then the question that decides whether the instrument is usable at all: how much precision does it have, and where?</p>
+</header>
+
+<h2>Why there is more than one answer</h2>
+
+<p>Once item parameters are known, a person’s responses give a likelihood over <var>θ</var>. From that curve you can extract a single number in several defensible ways, and they are not equivalent. IRTBoss implements three, and the choice matters most for exactly the people whose scores are most consequential: the highest and lowest scorers.</p>
+
+<p>Begin with what all three share. The likelihood of person <var>i</var>’s responses as a function of ability is</p>
+
+<div class="eq">
+<var>L</var>(<var>θ</var>) <span class="op">=</span> <span style="font-size:1.3em">∏</span><sub><var>j</var> observed</sub> <var>P<sub>j</sub></var>(<var>x<sub>ij</sub></var> <span class="op">|</span> <var>θ</var>)
+<span class="tag">(1)</span>
+</div>
+
+<p>Missing responses drop out of the product, exactly as in estimation. A respondent who answered nothing has a flat likelihood and is <strong>not scored at all</strong> — the code declines rather than returning the prior mean, which would be “a number about the population wearing a person’s name”.</p>
+
+<h3>The problem with plain maximum likelihood</h3>
+
+<p>The obvious estimator maximises (1). It has two flaws. It is <strong>biased outward</strong> — the ML estimate is systematically too extreme, with the bias largest for short tests. Worse, for a perfect score the likelihood increases without bound, so the estimate is +∞; for a zero score, −∞. Neither is reportable, and every alternative below is a way of fixing this.</p>
+
+<h2>EAP — the posterior mean</h2>
+
+<p>Bring in the population distribution as a prior, giving a posterior over the quadrature grid, and take its mean:</p>
+
+<div class="eq eq-left">
+<var>p<sub>k</sub></var> <span class="op">=</span> <var>L</var>(<var>θ<sub>k</sub></var>) <var>A<sub>k</sub></var> <span class="op">/</span> <span style="font-size:1.2em">∑</span><sub><var>k</var>′</sub> <var>L</var>(<var>θ<sub>k</sub></var>′) <var>A<sub>k</sub></var>′
+<br><br>
+<var>θ̂</var><sub>EAP</sub> <span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>k</var></sub> <var>θ<sub>k</sub></var> <var>p<sub>k</sub></var>,
+<span style="padding-left:1.2em">SE(<var>θ̂</var><sub>EAP</sub>) <span class="op">=</span> √( <span style="font-size:1.2em">∑</span><sub><var>k</var></sub> <var>p<sub>k</sub></var> (<var>θ<sub>k</sub></var> <span class="op">−</span> <var>θ̂</var><sub>EAP</sub>)² )</span>
+<span class="tag">(2)</span>
+</div>
+
+<p>Properties: always finite, including for perfect and zero scores; lowest average squared error of the three; and cheap, because it is just a weighted average — no iteration.</p>
+
+<p>The catch is <strong>shrinkage</strong>. The prior pulls every estimate toward the population mean, and the pull is strongest where the data are weakest, which is at the extremes. A genuinely outstanding candidate is systematically estimated as less outstanding than they are. For group-level work — mean differences, correlations with other variables — this is harmless or even helpful. For reporting an individual’s standing, it is a thumb on the scale.</p>
+
+<h2>MAP — the posterior mode</h2>
+
+<p>Same posterior, but take its peak rather than its average, found by Newton iterations. Its standard error comes from the curvature at the mode:</p>
+
+<div class="eq">
+SE(<var>θ̂</var><sub>MAP</sub>) <span class="op">=</span> 1 <span class="op">/</span> √( <var>I</var>(<var>θ̂</var>) <span class="op">+</span> 1<span class="op">/</span><var>σ</var>² )
+<span class="tag">(3)</span>
+</div>
+
+<p>where <var>I</var>(<var>θ</var>) is the test information from Part 3 and <var>σ</var> is the population standard deviation. Read (3) as: precision from the items, plus precision from the prior. MAP shares EAP’s shrinkage and is reported mainly for comparability with other software.</p>
+
+<h2>WLE — Warm’s weighted likelihood</h2>
+
+<p>Warm (1989) asked whether the outward bias of maximum likelihood could be removed <em>without</em> introducing a prior that pulls inward. It can. Modify the score equation by a correction term built from the test information and its derivative:</p>
+
+<div class="eq eq-left">
+solve for <var>θ</var>:
+<span style="padding-left:0.6em">∂ ln <var>L</var>(<var>θ</var>) / ∂<var>θ</var> <span class="op">+</span> <var>J</var>(<var>θ</var>) <span class="op">/</span> ( 2 <var>I</var>(<var>θ</var>) ) <span class="op">=</span> 0</span>
+<span class="tag">(4)</span>
+</div>
+
+<p>where, for dichotomous items,</p>
+
+<div class="eq">
+<var>J</var>(<var>θ</var>) <span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>j</var></sub> <var>P<sub>j</sub></var>′(<var>θ</var>) <var>P<sub>j</sub></var>″(<var>θ</var>) <span class="op">/</span> [ <var>P<sub>j</sub></var>(<var>θ</var>) (1 <span class="op">−</span> <var>P<sub>j</sub></var>(<var>θ</var>)) ]
+<span class="tag">(5)</span>
+</div>
+
+<p>The correction is exactly large enough to cancel the leading (first-order) bias term of the ML estimate. Its standard error is the classical test-information form:</p>
+
+<div class="eq">
+SE(<var>θ̂</var><sub>WLE</sub>) <span class="op">=</span> 1 <span class="op">/</span> √<var>I</var>(<var>θ̂</var>)
+<span class="tag">(6)</span>
+</div>
+
+<p>WLE stays finite for perfect and zero scores, where plain ML diverges, and it does not shrink toward the mean. In the code’s own words, it “is the right default when individual scores are reported back to individual people.” The general polytomous form of (5) uses the category first and second derivatives, which is why <code>scoring.py</code> imports <code>category_derivative</code> and <code>category_second_derivative</code> from the single information module rather than deriving anything itself.</p>
+
+<div class="box">
+<h4>Choosing, in one table</h4>
+<div class="scroll">
+<table>
+<thead><tr><th>Purpose</th><th>Use</th><th>Because</th></tr></thead>
+<tbody>
+<tr><td>Individual reports, certificates, feedback to a person</td><td><strong>WLE</strong></td><td>No shrinkage, finite at the extremes, bias-corrected</td></tr>
+<tr><td>Group means, correlations, regression outcomes</td><td><strong>EAP</strong></td><td>Lowest average error; shrinkage is acceptable and reduces noise</td></tr>
+<tr><td>Comparability with software that reports modes</td><td><strong>MAP</strong></td><td>Matching convention</td></tr>
+<tr><td>Anything at a cut score near the top or bottom</td><td><strong>WLE</strong>, and report the SE</td><td>EAP’s inward pull is largest exactly there</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div class="box box-warn">
+<h4>A current limitation of the tool</h4>
+<p>All three estimators exist in the engine, but the analysis orchestrator scores respondents with <strong>EAP</strong>, and MAP and WLE are not yet selectable through the API. This is recorded in <a href="../../PROGRESS.md">PROGRESS.md</a> under known gaps. If you are reporting individual scores at the extremes, that matters, and it is the kind of thing to check rather than assume.</p>
+</div>
+
+<h2>Information: precision is a curve, not a number</h2>
+
+<p>The test information function is the sum of item informations from Part 3:</p>
+
+<div class="eq">
+<var>I</var>(<var>θ</var>) <span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>j</var></sub> <var>I<sub>j</sub></var>(<var>θ</var>),
+<span style="padding-left:1.2em">SE(<var>θ</var>) <span class="op">=</span> 1 <span class="op">/</span> √<var>I</var>(<var>θ</var>)</span>
+<span class="tag">(7)</span>
+</div>
+
+<p>Information is additive across items — a direct consequence of local independence — which makes test design tractable: to measure a particular region better, add items whose difficulties sit there.</p>
+
+<figure>
+<svg viewBox="0 0 720 320" role="img" aria-label="Test information for a twelve-item test peaking near theta zero at about two point eight, with the corresponding conditional standard error curve reaching its minimum of about zero point six there and rising steeply beyond plus or minus two.">
+  <line x1="60" y1="250" x2="670" y2="250" stroke="currentColor"/>
+  <line x1="60" y1="250" x2="60" y2="35" stroke="currentColor"/>
+
+  <g font-size="10" fill="currentColor" text-anchor="middle">
+    <text x="60" y="268">−4</text>
+    <text x="210" y="268">−2</text>
+    <text x="360" y="268">0</text>
+    <text x="510" y="268">2</text>
+    <text x="660" y="268">4</text>
+  </g>
+  <text x="360" y="290" font-size="12" fill="currentColor" text-anchor="middle">ability θ</text>
+
+  <text x="52" y="44" font-size="10" fill="currentColor" text-anchor="end">high</text>
+  <text x="52" y="248" font-size="10" fill="currentColor" text-anchor="end">low</text>
+
+  <!-- precision band shading bounds -->
+  <line x1="180" y1="35" x2="180" y2="250" stroke="currentColor" stroke-width="0.7" stroke-dasharray="2 2"/>
+  <line x1="560" y1="35" x2="560" y2="250" stroke="currentColor" stroke-width="0.7" stroke-dasharray="2 2"/>
+  <text x="370" y="52" font-size="10" fill="currentColor" text-anchor="middle">precision band: SE ≤ 0.4 equivalent</text>
+
+  <!-- information -->
+  <polyline fill="none" stroke="currentColor" stroke-width="1.8" points="60,235.5 72,232.8 85,229.6 98,225.9 110,221.7 122,216.8 135,211.2 148,205.0 160,198.1 172,190.6 185,182.7 197,174.3 210,165.7 222,156.9 235,148.2 248,139.9 260,132.1 272,125.0 285,118.9 298,113.8 310,109.7 322,106.6 335,104.4 348,102.8 360,102.0 372,102.0 385,102.7 398,104.2 410,106.6 422,110.0 435,114.4 447,119.8 460,126.1 472,133.0 485,140.5 498,148.2 510,156.0 522,163.8 535,171.6 548,179.2 560,186.5 572,193.5 585,200.1 598,206.2 610,211.9 622,217.0 635,221.6 648,225.6 660,229.2"/>
+  <text x="366" y="96" font-size="11" fill="currentColor">information I(θ)</text>
+
+  <!-- SE (clipped at top) -->
+  <polyline fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-dasharray="5 3" points="98,43.2 110,59.4 122,74.1 135,87.2 148,98.8 160,109.2 172,118.3 185,126.4 197,133.4 210,139.5 222,144.9 235,149.4 248,153.3 260,156.6 272,159.3 285,161.4 298,163.1 310,164.3 322,165.3 335,165.9 348,166.4 360,166.6 372,166.6 385,166.4 398,166.0 410,165.3 422,164.3 435,162.9 447,161.1 460,158.9 472,156.2 485,153.1 498,149.5 510,145.4 522,140.7 535,135.4 548,129.5 560,122.7 572,115.1 585,106.4 598,96.6 610,85.7 622,73.4 635,59.7 648,44.5"/>
+  <text x="150" y="70" font-size="11" fill="var(--accent)">SE(θ) = 1/√I(θ)</text>
+</svg>
+<figcaption>A twelve-item test with difficulties spread from −1.9 to +2.2. Information peaks at about 2.8 near the centre, giving a best-case standard error of roughly 0.60 logits. The two curves are mirror images by construction, and the vital reading is at the edges: beyond about ±2 the standard error grows sharply, so a candidate estimated at 3.0 might as easily be at 2.2 or 3.8. Reporting that estimate to two decimal places would be a fiction.</figcaption>
+</figure>
+
+<div class="box">
+<h4>What that figure should change about your practice</h4>
+<p>A single reliability coefficient for the test above would be somewhere around 0.75 and would be equally true of the middle and the tails. It would be uninformative about the only question that matters for a high-stakes decision: <em>is the test precise enough at the cut score?</em> If your cut sits at θ = 2, this test does not answer it well, and no amount of averaging will reveal that. This is the single most practical advantage of IRT over classical test theory.</p>
+</div>
+
+<h2>Reliability, done correctly</h2>
+
+<p>Reliability is the proportion of observed score variance that reflects real differences rather than measurement error. In IRT it is obtained by averaging the error variance across the population:</p>
+
+<div class="eq">
+<var>ρ</var> <span class="op">=</span> 1 <span class="op">−</span> <span style="font-size:1.2em">𝔼</span><sub><var>θ</var></sub>[ SE²(<var>θ</var>) ] <span class="op">/</span> Var(<var>θ</var>)
+<span class="tag">(8)</span>
+</div>
+
+<p>Read carefully: the expectation is over the <em>error variance</em>, taken before the division. That ordering is not a stylistic choice, and getting it wrong is the subject of the most instructive defect in this project’s history.</p>
+
+<div class="box box-warn">
+<h4>The Jensen’s inequality bug — worth understanding in full</h4>
+<p>The previous implementation computed marginal reliability as</p>
+<div class="eq eq-left">ρ<sub>wrong</sub> = 1 − 1 / mean(<var>I</var>(<var>θ</var>))</div>
+<p>which averages the <em>information</em> and then inverts, rather than inverting first and then averaging. Jensen’s inequality tells us that for the convex function 1/<var>x</var>,</p>
+<div class="eq eq-left">1 / 𝔼[<var>I</var>] <span class="op">≤</span> 𝔼[1 / <var>I</var>]</div>
+<p>so the subtracted term was always too small and the reported reliability was always too high. Two things make this particularly bad. The error is <strong>one-directional</strong> — it never understates, so it could not be caught by noticing implausible values in both directions. And its size grows with the variability of information across the scale, which means <strong>the worse the test, the larger the overstatement</strong>. A well-targeted test with flat information was reported almost correctly; a test with a sharp peak and weak tails — exactly the test whose users most need warning — was flattered most.</p>
+<p>The module docstring in <code>reliability.py</code> records this, and it is a good template for how to document a fixed defect: state the wrong formula, state the right one, and state the direction and mechanism of the error.</p>
+</div>
+
+<h3>Two reliabilities, because “SE” means two things</h3>
+
+<p>Equation (8) needs SE²(<var>θ</var>), and which SE depends on how scores were produced. IRTBoss reports both rather than choosing:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Version</th><th>SE²(θ)</th><th>Matches</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td><strong>Bayesian</strong></td><td>1 / (<var>I</var>(<var>θ</var>) + 1/<var>σ</var>²)</td><td>EAP and MAP scores</td><td>Bounded above by <var>σ</var>²; the figure to quote when using this tool’s own scores</td></tr>
+<tr><td><strong>Information-based</strong></td><td>1 / <var>I</var>(<var>θ</var>)</td><td>ML or WLE scores</td><td>Unbounded where information is low; for a 3PL it can be dominated entirely by the low-ability tail</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>When the two diverge sharply, that divergence is itself the finding: it says the test has regions where the items carry almost no information and the prior is doing the work. IRTBoss flags this rather than smoothing it away.</p>
+
+<h3>Empirical reliability</h3>
+
+<p>A third figure comes from the scores actually produced, rather than from the model-implied population average:</p>
+
+<div class="eq">
+<var>ρ</var><sub>empirical</sub> <span class="op">=</span> 1 <span class="op">−</span> mean(SE<sub><var>i</var></sub>²) <span class="op">/</span> Var(<var>θ̂<sub>i</sub></var>)
+<span class="tag">(9)</span>
+</div>
+
+<p>This reflects your actual sample, including the fact that your respondents may not be spread as the assumed population is. Comparing it with the model-based figure is a quick check on whether the population assumption is reasonable for your data.</p>
+
+<h3>McDonald’s ω</h3>
+
+<p>A dichotomous IRT model is a normal-ogive factor model in disguise, and that equivalence gives a congeneric reliability coefficient. Convert each slope to the normal metric and then to a factor loading:</p>
+
+<div class="eq eq-left">
+<var>a*<sub>j</sub></var> <span class="op">=</span> <var>a<sub>j</sub></var> <span class="op">/</span> 1.702,
+<span style="padding-left:1em"><var>λ<sub>j</sub></var> <span class="op">=</span> <var>a*<sub>j</sub></var> <span class="op">/</span> √(1 <span class="op">+</span> <var>a*<sub>j</sub></var>²)</span>
+<br><br>
+<var>ω</var> <span class="op">=</span> (∑<var>λ<sub>j</sub></var>)² <span class="op">/</span> [ (∑<var>λ<sub>j</sub></var>)² <span class="op">+</span> ∑(1 <span class="op">−</span> <var>λ<sub>j</sub></var>²) ]
+<span class="tag">(10)</span>
+</div>
+
+<p>Unlike Cronbach’s α, ω does not require the loadings to be equal. IRTBoss declines to compute it in two cases, each with a stated reason returned alongside the absence: not for the <strong>3PL</strong>, because a non-zero lower asymptote breaks the factor-model equivalence; and not for <strong>polytomous</strong> models, because one loading per item does not capture the category structure and the single-coefficient form would understate reliability.</p>
+
+<h3>Why Cronbach’s α is absent</h3>
+
+<p>α is a lower bound on reliability that is exact only under <em>tau-equivalence</em> — equal item discriminations. Fitting a 2PL, GRM or GPCM is an explicit statement that discriminations differ, so reporting α beside those models would contradict the model that produced the scores. Where α is defensible at all (Rasch, PCM, which do assume equal slopes) it adds nothing the model-based figures do not already give, and those come with a conditional standard error attached. It is not an oversight; it is a refusal.</p>
+
+<h2>Precision bands: the range the test can actually measure</h2>
+
+<p>The most operationally useful output in this module is the <strong>precision band</strong>: the contiguous stretch of the <var>θ</var> scale over which the conditional standard error stays below a stated bar. In the code it is a small structure carrying <code>max_sem</code>, a <code>lower</code> and <code>upper</code> bound, and a <code>reliability_equivalent</code> — the single reliability figure that the chosen SE corresponds to, so the band can be explained to an audience that thinks in reliabilities.</p>
+
+<p>A band is the honest way to answer “is this instrument good enough?”, because the answer depends on <em>for whom</em>. Note the deliberate design: either bound can be <code>None</code>, meaning the test never achieves that precision on that side. An absent bound is reported as absent — not as the edge of the grid, which would silently claim measurement precision that does not exist.</p>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>Plain ML scores are outward-biased and infinite for perfect scores; EAP, MAP and WLE are three principled repairs.</li>
+  <li>EAP and MAP shrink toward the mean — good for group statistics, wrong for individual reporting at the extremes. WLE removes the bias without shrinking, and is the right default for individual feedback.</li>
+  <li>The orchestrator currently uses EAP only; MAP and WLE are not exposed through the API yet.</li>
+  <li>Information is additive over items, peaks at item difficulties, and its reciprocal square root is the conditional standard error.</li>
+  <li>Reliability must average the error variance and then divide — averaging information first always overstates, and overstates most for the worst tests.</li>
+  <li>Two reliabilities are reported because Bayesian and information-based standard errors match different scoring methods.</li>
+  <li>α is refused on principle; ω is refused for the 3PL and polytomous models with a stated reason.</li>
+  <li>Precision bands answer “good enough for whom”, and an absent bound means the test never gets that precise.</li>
+</ul>
+
+<nav class="pager">
+  <a href="04-estimation.html"><span class="lbl">Previous</span>← Part 4 · How the numbers are found</a>
+  <a href="06-fit-assumptions.html"><span class="lbl">Next</span>Part 6 · Fit and assumptions →</a>
+</nav>
+
+</div>
+</body>
+</html>

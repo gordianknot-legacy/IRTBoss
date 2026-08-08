@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 8 · Comparing models without declaring a winner</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 8 of 12</p>
+  <h1>Comparing models without declaring a winner</h1>
+  <ul class="tracks">
+    <li class="track track-stake">Stakeholder</li>
+    <li class="track track-user">Analyst</li>
+  </ul>
+  <p class="lede">The most unusual design decision in this tool, and the one most likely to be mistaken for a missing feature. IRTBoss fits several models and reports a dossier of evidence about how they compare. It has no <code>best_model</code> field, on purpose, for four documented reasons.</p>
+</header>
+
+<h2>The decision, and its reversal</h2>
+
+<p>The version of this platform that preceded the current one promised “one recommended model, always”. That promise was removed, and the reasons are recorded in the source of <code>backend/app/psychometrics/comparison.py</code> rather than asserted in a changelog. They are worth understanding in full, because each one is a lesson about model selection that generalises well beyond this tool.</p>
+
+<h3>Reason one: BIC is directionally biased against the 3PL</h3>
+
+<p>Whittaker, Chang and Dodd (2012) examined BIC’s behaviour in IRT model selection and found it <strong>never selected the 3PL correctly in any condition they examined</strong>. The cause is structural rather than a small-sample artefact, and the chain is short enough to follow completely:</p>
+
+<ol class="steps">
+  <li>The guessing parameter <var>c</var> is weakly identified — few respondents sit low enough on the scale to pin down a lower asymptote (Part 3).</li>
+  <li>So adding <var>c</var> buys very little log-likelihood, even when guessing is genuinely present.</li>
+  <li>BIC charges ln(<var>N</var>) per parameter, which for <var>N</var> = 2,000 is about 7.6 — a substantial toll.</li>
+  <li>The toll exceeds the gain. BIC rejects the 3PL almost regardless of the data.</li>
+</ol>
+
+<p>The consequence is uncomfortable: <strong>a tool that reports “2PL” on multiple-choice data may be reporting its own penalty function rather than a property of the data.</strong> The user cannot tell which, because the output looks the same either way.</p>
+
+<h3>Reason two: the 2PL-versus-3PL likelihood-ratio test is invalid</h3>
+
+<p>The natural alternative is a likelihood-ratio test — the 2PL is the 3PL with <var>c</var> = 0, so test that restriction. This does not work, and the reason is a genuine mathematical fact rather than a matter of taste.</p>
+
+<p>Wilks’ theorem, which gives the likelihood-ratio statistic its chi-square distribution, requires the null value to lie in the <em>interior</em> of the parameter space. Here <var>c</var> = 0 sits on its <strong>boundary</strong> — probabilities cannot be negative. The regularity condition fails, and the statistic is not chi-square (Brown, Templin &amp; Cohen, 2015). Its true null distribution is a mixture, and the <var>p</var>-value you get from a chi-square table is wrong.</p>
+
+<p>IRTBoss <strong>refuses that test</strong> rather than printing a <var>p</var>-value known to be wrong, and states the refusal in the output. This is the refuse-rather-than-repair principle applied to an inference instead of to data.</p>
+
+<h3>Reason three: ΔBIC has no sampling distribution</h3>
+
+<p>Suppose you compare BICs and take the smallest. An argmin treats a gap of 3 and a gap of 300 identically — both simply select. But those two situations are entirely different: one is a coin flip, the other is decisive. Information criteria have no standard error, so they cannot express the difference.</p>
+
+<p>This matters because at the sample sizes typical of applied work, competing IRT models are frequently <strong>genuinely indistinguishable</strong>. “These models are not distinguishable here” has to be a first-class output — and no information criterion can ever produce it.</p>
+
+<h3>Reason four: disagreement is information</h3>
+
+<p>Kang &amp; Cohen (2007) documented that selection criteria routinely disagree with each other in IRT. When AIC prefers one model and cross-validation another, that disagreement is the most informative thing available: it says the choice is not determined by the data. Resolving it by fiat — picking whichever criterion the software happens to favour — would be inventing a result and discarding the finding.</p>
+
+<h2>The primary criterion: held-out predictive log-likelihood</h2>
+
+<p>If not an information criterion, then what? IRTBoss uses <strong><var>k</var>-fold cross-validated held-out predictive log-likelihood</strong>, split by respondent.</p>
+
+<ol class="steps">
+  <li>Partition the respondents into <var>k</var> folds.</li>
+  <li>For each fold: fit the model on the other <var>k</var>−1 folds, obtaining item parameters and a latent prior.</li>
+  <li>Score the held-out respondents’ <em>full response patterns</em> under those parameters, marginalising the latent trait over the quadrature prior the fit produced:
+    <div class="eq eq-left">
+    <var>ℓ</var><sub>held-out</sub> <span class="op">=</span> <span style="font-size:1.2em">∑</span><sub><var>i</var> ∈ fold</sub> ln <span style="font-size:1.2em">∑</span><sub><var>k</var></sub> <var>P</var>(<b>x</b><sub><var>i</var></sub> <span class="op">|</span> <var>θ<sub>k</sub></var>, <var>φ̂</var><sub>train</sub>) <var>A<sub>k</sub></var>
+    <span class="tag">(1)</span>
+    </div>
+  </li>
+  <li>Sum across folds.</li>
+</ol>
+
+<p>Notice what this measures: how well parameters estimated from one set of people predict the responses of <em>different</em> people. That is the question you actually care about, and it is not the question an in-sample likelihood answers.</p>
+
+<p>Three properties make it the right primary criterion:</p>
+
+<ul>
+  <li><strong>It works for non-nested comparisons.</strong> GRM against GPCM, Rasch against 1PL — no nesting relationship required.</li>
+  <li><strong>It needs no boundary-valid reference distribution.</strong> The 3PL’s boundary problem simply does not arise.</li>
+  <li><strong>It comes with a standard error.</strong> This is the decisive advantage, and it is what makes an indistinguishability verdict possible at all.</li>
+</ul>
+
+<div class="box box-math">
+<h4>Paired per-fold differences: a small idea with a large effect</h4>
+<p>Comparisons between two models are made on <strong>paired per-fold differences</strong>, not on two independent means. In each fold the same respondents are held out for both models, so:</p>
+<div class="eq eq-left">
+<var>d<sub>f</sub></var> <span class="op">=</span> <var>ℓ</var><sub>A,<var>f</var></sub> <span class="op">−</span> <var>ℓ</var><sub>B,<var>f</var></sub>,
+<span style="padding-left:1em">SE(<var>d̄</var>) <span class="op">=</span> <var>s<sub>d</sub></var> <span class="op">/</span> √<var>k</var></span>
+</div>
+<p>Fold-to-fold variation that both models share — one fold happening to contain unusual respondents — cancels in the difference. Comparing two independent means would throw that pairing away and widen every interval for no reason, making genuine differences look indistinguishable. The statistical point is the same one behind a paired <var>t</var>-test, and the code states it explicitly.</p>
+</div>
+
+<h2>Secondary evidence</h2>
+
+<p>AIC, BIC and — for genuinely nested pairs only — the likelihood-ratio test are reported alongside, as secondary evidence:</p>
+
+<div class="eq eq-left">
+AIC <span class="op">=</span> <span class="op">−</span>2<var>ℓ</var> <span class="op">+</span> 2<var>q</var>
+<span style="padding-left:2.5em">BIC <span class="op">=</span> <span class="op">−</span>2<var>ℓ</var> <span class="op">+</span> <var>q</var> ln <var>N</var></span>
+<span class="tag">(2)</span>
+</div>
+
+<p>with <var>q</var> the number of free parameters. The difference in one line: AIC targets predictive accuracy and tends to favour richer models; BIC approximates a Bayesian model probability under a particular prior and penalises parameters harder as <var>N</var> grows. Neither has a standard error.</p>
+
+<h3>The nesting table, with two entries people get wrong</h3>
+
+<p>A likelihood-ratio test requires that one model be a genuine restriction of the other. IRTBoss keeps an explicit table of which pairs qualify, and refuses the test otherwise. Two entries are counter-intuitive and both are documented in the code:</p>
+
+<div class="box box-warn">
+<h4>Rasch and the 1PL are <em>not</em> nested in each other</h4>
+<p>Rasch fixes every slope at 1 and lets the latent variance float. The 1PL estimates one common slope and fixes the variance at 1. Neither is a restriction of the other — they have <strong>identical parameter counts</strong> and place items on <strong>different metrics</strong>. A likelihood-ratio test between them has no degrees of freedom to speak of and no valid interpretation. They can be compared on held-out likelihood, which requires no nesting.</p>
+<h4>GRM and GPCM are not nested either</h4>
+<p>They are different functional forms — cumulative boundaries versus adjacent-step logits — not a restriction of one another, despite having the same number of parameters. Again: compare them on held-out likelihood, and expect the comparison to be close.</p>
+</div>
+
+<h2>The disagreement matrix and the indistinguishability verdict</h2>
+
+<p>The dossier includes a <strong>disagreement matrix</strong>: for each pair of criteria, which model each prefers. A dossier where everything agrees is a strong result. A dossier where cross-validation prefers the GPCM, AIC prefers the GPCM and BIC prefers the PCM tells you the extra parameters are buying real but marginal predictive value — which is a genuine finding, and one you would never see from an argmin.</p>
+
+<p>Alongside it sits the <strong>indistinguishability verdict</strong>. When the paired per-fold difference between two models is small relative to its standard error, the tool says so directly: on this sample, these models cannot be told apart. That statement is not a failure to decide; it is the correct answer, and it has a practical consequence — choose on grounds the data cannot address, such as interpretability, the tradition your audience expects, or the requirements of a downstream equating design.</p>
+
+<h2>The reference model: a vantage point, not a verdict</h2>
+
+<p>Item-level diagnostics — item fit, DIF — have to be computed under <em>some</em> model. So the orchestrator designates a <strong>reference model</strong> and records the rationale in the notes that reach the report.</p>
+
+<p>Here is the actual text produced by a real run of this tool on 400 respondents and 12 items, fitting 2PL and Rasch:</p>
+
+<blockquote>Rasch leads on held-out predictive log-likelihood and is used as the reference for item-level diagnostics. This is a choice of vantage point, not a verdict: the comparison dossier reports every criterion and does not name a winner.</blockquote>
+
+<p>Both halves matter. Something had to be chosen, so the choice is made by a stated rule and disclosed. And the disclosure is explicit that the choice does not settle the model question. Part 11 walks through that entire run.</p>
+
+<h2>Two things deliberately not implemented</h2>
+
+<h3>The Vuong test</h3>
+
+<p>The Vuong test compares non-nested models via a normal-approximation statistic. It is not implemented, and the refusal states why: the held-out predictive log-likelihood answers the same question with <strong>one fewer asymptotic approximation</strong>. Where a tool could offer two routes to the same conclusion and one rests on weaker assumptions, offering both invites the reader to pick the one that agrees with them.</p>
+
+<h3>Consequence analysis — a real gap</h3>
+
+<p>The most useful thing this section could add is described in <a href="../v2/ARCHITECTURE.md">ARCHITECTURE.md</a> §3.3 and <strong>is not built</strong>: an analysis of how much the choice of model actually changes what you would do. Concretely — across candidate models, how much do individual <var>θ</var> estimates move, how much do their standard errors change, and how many people cross a cut score?</p>
+
+<p>That is the question a decision-maker has. If two models are statistically distinguishable but reclassify nobody, the choice is academic. If they are indistinguishable yet move 8% of candidates across a pass mark, the choice is the most consequential decision in the analysis, and the indistinguishability verdict is precisely the wrong reason to relax. This gap is listed in <a href="../../PROGRESS.md">PROGRESS.md</a>, and until it is filled, the check has to be done by hand.</p>
+
+<h2>How to read a dossier: a worked procedure</h2>
+
+<ol class="steps">
+  <li><strong>Start with the held-out likelihood and its standard error.</strong> Is the leader ahead by more than a couple of standard errors of the paired difference? If not, stop treating it as the leader.</li>
+  <li><strong>Read the indistinguishability verdict.</strong> If models are indistinguishable, the remaining criteria are tie-breakers among near-equals, not evidence.</li>
+  <li><strong>Read the disagreement matrix.</strong> Agreement strengthens the conclusion. Disagreement localises what is in dispute — usually whether some extra parameters are worth their cost.</li>
+  <li><strong>Read the refusals.</strong> A refused likelihood-ratio test is information: it tells you the comparison you were about to make was not available. Do not route around it.</li>
+  <li><strong>Check parsimony against purpose.</strong> Simpler models transfer better, equate more easily and are easier to explain. Among indistinguishable models, that is a legitimate basis for choosing.</li>
+  <li><strong>Do the consequence check by hand.</strong> Score your respondents under each candidate and count how many cross your cut. Until consequence analysis exists in the tool, this is the step that turns a statistical comparison into a decision.</li>
+</ol>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>BIC is structurally biased against the 3PL because <var>c</var> is weakly identified — a “2PL” verdict may be the penalty function talking.</li>
+  <li>The 2PL-vs-3PL likelihood-ratio test is invalid because <var>c</var> = 0 is on the parameter-space boundary; the tool refuses it rather than printing a wrong <var>p</var>-value.</li>
+  <li>Information criteria have no standard error, so they cannot say “indistinguishable” — which at applied sample sizes is often the truth.</li>
+  <li>Held-out predictive log-likelihood is the primary criterion: non-nested-safe, boundary-safe, and it has a standard error. Comparisons use paired per-fold differences so shared fold variation cancels.</li>
+  <li>Rasch/1PL and GRM/GPCM are not nested pairs, despite equal parameter counts.</li>
+  <li>Disagreement between criteria is reported, not resolved.</li>
+  <li>A reference model is designated for item diagnostics with a recorded rationale, and that is explicitly not a verdict.</li>
+  <li>Consequence analysis — how much the model choice changes decisions — is the significant missing piece, and must be done by hand for now.</li>
+</ul>
+
+<nav class="pager">
+  <a href="07-dif.html"><span class="lbl">Previous</span>← Part 7 · Differential item functioning</a>
+  <a href="09-applications.html"><span class="lbl">Next</span>Part 9 · Applications →</a>
+</nav>
+
+</div>
+</body>
+</html>
