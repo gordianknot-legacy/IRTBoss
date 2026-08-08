@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 10 · The software: every moving part</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 10 of 12</p>
+  <h1>The software: every moving part</h1>
+  <ul class="tracks">
+    <li class="track track-maint">Maintainer</li>
+  </ul>
+  <p class="lede">Parts 3–8 explained what gets computed. This part explains where, by whom, and why the pieces are arranged the way they are. The organising idea is the same honesty principle from Part 1, applied to infrastructure: a failure should say what actually went wrong, at the layer it went wrong, and no state should ever silently pretend to be another.</p>
+</header>
+
+<h2>The shape: one image, two processes</h2>
+
+<p>The backend is a single Docker image run as two different processes. The <strong>API</strong> (FastAPI, served by uvicorn) handles HTTP — auth, uploads, run creation, results. The <strong>worker</strong> (an RQ worker, <code>python -m app.workers.main</code>) executes analyses. They share the image so they cannot drift: a worker running older estimation code than the API would produce results the API cannot describe, and the engine version stamped on every run would then be a lie. Around them sit three stores — PostgreSQL for durable state, Redis for the job queue, and object storage for uploaded files — plus the React frontend, deployed separately as a static site on Vercel.</p>
+
+<figure>
+<svg viewBox="0 0 700 360" role="img" aria-label="Component diagram of one analysis run. The browser talks to the API over HTTPS. The API writes the CSV to object storage, writes dataset and run rows to PostgreSQL, and enqueues a job id in Redis. The worker, a separate process, dequeues the job from Redis, reads the CSV back from object storage by its stored reference, runs the analysis, and writes fits and diagnostics to PostgreSQL. The browser polls the API, which reads run status from PostgreSQL only, never from Redis.">
+  <defs>
+    <marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+    <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <rect x="15" y="130" width="110" height="54" rx="4" fill="none" stroke="currentColor"/>
+  <text x="70" y="152" font-size="11" fill="currentColor" text-anchor="middle">browser</text>
+  <text x="70" y="168" font-size="10" fill="currentColor" text-anchor="middle">React SPA (Vercel)</text>
+
+  <rect x="215" y="130" width="120" height="54" rx="4" fill="none" stroke="currentColor"/>
+  <text x="275" y="152" font-size="11" fill="currentColor" text-anchor="middle">API process</text>
+  <text x="275" y="168" font-size="10" fill="currentColor" text-anchor="middle">FastAPI · never estimates</text>
+
+  <rect x="430" y="20" width="140" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="500" y="40" font-size="11" fill="currentColor" text-anchor="middle">object storage</text>
+  <text x="500" y="55" font-size="10" fill="currentColor" text-anchor="middle">uploaded CSVs</text>
+
+  <rect x="430" y="130" width="140" height="54" rx="4" fill="none" stroke="currentColor"/>
+  <text x="500" y="150" font-size="11" fill="currentColor" text-anchor="middle">PostgreSQL</text>
+  <text x="500" y="166" font-size="10" fill="currentColor" text-anchor="middle">users · datasets · runs</text>
+  <text x="500" y="178" font-size="10" fill="currentColor" text-anchor="middle">fits · diagnostics</text>
+
+  <rect x="430" y="240" width="140" height="46" rx="4" fill="none" stroke="currentColor"/>
+  <text x="500" y="260" font-size="11" fill="currentColor" text-anchor="middle">Redis queue (RQ)</text>
+  <text x="500" y="275" font-size="10" fill="currentColor" text-anchor="middle">job ids only</text>
+
+  <rect x="215" y="290" width="120" height="54" rx="4" fill="var(--accent-bg)" stroke="var(--accent)"/>
+  <text x="275" y="312" font-size="11" fill="var(--accent)" text-anchor="middle">worker process</text>
+  <text x="275" y="328" font-size="10" fill="var(--accent)" text-anchor="middle">all estimation here</text>
+
+  <line x1="125" y1="150" x2="210" y2="150" stroke="currentColor" marker-end="url(#m1)"/>
+  <text x="167" y="143" font-size="9.5" fill="currentColor" text-anchor="middle">1 upload · 4 poll</text>
+
+  <line x1="335" y1="138" x2="425" y2="55" stroke="currentColor" marker-end="url(#m1)"/>
+  <text x="365" y="85" font-size="9.5" fill="currentColor">2a put CSV</text>
+
+  <line x1="335" y1="157" x2="425" y2="157" stroke="currentColor" marker-end="url(#m1)"/>
+  <text x="380" y="150" font-size="9.5" fill="currentColor" text-anchor="middle">2b rows · 4 read status</text>
+
+  <line x1="335" y1="176" x2="425" y2="252" stroke="currentColor" marker-end="url(#m1)"/>
+  <text x="358" y="225" font-size="9.5" fill="currentColor">2c enqueue</text>
+
+  <line x1="425" y1="273" x2="340" y2="308" stroke="var(--accent)" marker-end="url(#m2)"/>
+  <text x="392" y="302" font-size="9.5" fill="var(--accent)">3a dequeue</text>
+
+  <line x1="330" y1="290" x2="432" y2="68" stroke="var(--accent)" marker-end="url(#m2)"/>
+  <text x="310" y="240" font-size="9.5" fill="var(--accent)" transform="rotate(-65 318 238)">3b get CSV by ref</text>
+
+  <line x1="335" y1="300" x2="430" y2="186" stroke="var(--accent)" marker-end="url(#m2)"/>
+  <text x="415" y="215" font-size="9.5" fill="var(--accent)">3c write results</text>
+</svg>
+<figcaption>One run, numbered. The API's job ends at 2c; the worker's begins at 3a; the browser learns everything through 4, which reads PostgreSQL only. Notice what is <em>absent</em>: no arrow from browser to worker, no arrow from API to worker, and no path on which anyone learns run status from Redis. The queue carries job ids; the truth lives in the database.</figcaption>
+</figure>
+
+<div class="box">
+<h4>Why estimation never runs in the web process</h4>
+<p>The API is async: nothing CPU-bound or blocking is allowed on its event loop, because minutes of numpy in a request handler would freeze every other user's requests behind one person's dataset. So <code>backend/app/workers/tasks.py</code> opens with the rule — this is the only place estimation runs — and the codebase enforces it structurally rather than by convention: the API imports the numerical engine only inside functions (lazily, for things like validating model names), so the web process never even loads numpy at startup. Blocking-but-cheap work in the API — CSV parsing, file writes — is pushed to threads.</p>
+</div>
+
+<h2>Signing in: Argon2id and a signed cookie</h2>
+
+<p>Accounts are email and password, nothing federated. Passwords are hashed with Argon2id (64 MiB memory cost, three passes) — a memory-hard function chosen so bulk offline guessing is expensive on the attacker's hardware, not just yours. Two details are worth knowing because they answer questions you will eventually be asked:</p>
+
+<ul>
+  <li><strong>Sessions are signed tokens, not database rows.</strong> The cookie holds an <code>itsdangerous</code>-signed payload of the user id plus a 16-hex fingerprint of the current password hash. Because the fingerprint is checked on every request, changing your password instantly invalidates every session everywhere — with no server-side session table to maintain. Cookies are <code>HttpOnly</code>, <code>SameSite=Lax</code>, and <code>Secure</code> in production, with a 12-hour lifetime.</li>
+  <li><strong>Login failures are deliberately uninformative, at some cost.</strong> One 401 message covers wrong password and unknown email, and an unknown email still pays for a full Argon2 verification against a dummy hash so response timing cannot distinguish the two. (Registration, which must say “taken”, does disclose registered addresses — a documented trade-off, not an oversight.)</li>
+</ul>
+
+<p>Every table a user can reach carries an <code>owner_id</code> — copied down onto datasets and runs deliberately, so ownership is one predicate on the row being read rather than a chain of joins someone can forget. Asking for another user's run returns 404, not 403: the API declines to confirm the id exists at all.</p>
+
+<h2>The upload: refused early, stored by reference</h2>
+
+<p>A dataset arrives as a CSV via <code>POST /projects/{id}/datasets</code>. Before anything touches the database:</p>
+
+<ol class="steps">
+  <li><strong>Size is enforced on arrival, not on promise.</strong> The body is read in 1 MiB chunks and aborted the moment the running total passes 25 MiB — the declared <code>Content-Length</code> is not trusted. Too big is HTTP 413.</li>
+  <li><strong>Shape is enforced next</strong> — at most 100,000 rows and 1,000 columns — and the declared ID and grouping columns must actually exist. Malformed is HTTP 422, with messages authored by this codebase rather than leaked from a parser.</li>
+  <li><strong>The bytes are fingerprinted</strong> (SHA-256) and stored under a fresh key — <code>datasets/&lt;uuid&gt;.csv</code>, never the client's filename. The checksum lands in the database next to the size, so “is this the same file?” has an answer forever.</li>
+</ol>
+
+<p>What the database stores for the file's location is a <em>storage reference</em>, not a path: <code>local:datasets/&lt;uuid&gt;.csv</code> in development, <code>s3://bucket/key</code> in production. The reason is a failure mode worth spelling out. The API writes the CSV; the worker reads it — a different process, in production possibly a different machine. If the database held a filesystem path, the moment those processes stop sharing a disk, the worker is handed a path its host never had and the run dies with a missing file — which <em>reads as corrupted data</em> and sends the investigator to the wrong layer entirely. The reference is self-describing, so a worker configured for one backend that meets a reference from the other refuses by name instead of guessing. And because a local reference cannot survive scaling past one machine, the config refuses to boot in production with the local backend at all.</p>
+
+<h2>Creating a run: the order of operations is the design</h2>
+
+<p><code>POST /datasets/{id}/analyses</code> with a list of model keys and a seed returns 202 Accepted. What happens inside happens in a deliberate order:</p>
+
+<ol class="steps">
+  <li>The <code>analysis_runs</code> row is written and committed first, with status <code>QUEUED</code>, the requested models, the seed, and the engine version.</li>
+  <li>Only then is the job enqueued to Redis (off the event loop — the Redis client is synchronous, and a blocking socket on the loop is the same defect class as blocking CPU).</li>
+  <li>If enqueueing fails, the API returns 503 — but <em>leaves the row QUEUED</em>. The durable record says what was requested; an operator can re-enqueue. The reverse order would risk a job with no row, work the system cannot account for.</li>
+</ol>
+
+<p>The job payload is just the run id. Everything else — which file, which models, which seed — is read back from the database by the worker, so the queue never holds state that could disagree with the durable record. One structural nicety: the enqueue call passes the imported task <em>function object</em>, not a dotted-string name, so renaming the task breaks at import time in the API rather than at dequeue time in the worker.</p>
+
+<h2>The worker: one job, executed honestly</h2>
+
+<p>The worker dequeues, loads the run row, marks it <code>RUNNING</code> with a start timestamp (this is the moment the browser's badge changes), fetches the CSV by its storage reference, and calls <code>run_analysis()</code> — the orchestrator you met throughout Parts 4–8. Its contract has three clauses that define the tool's failure behaviour:</p>
+
+<ul>
+  <li><strong>A failed diagnostic does not fail the run.</strong> Each statistic is attempted independently; a failure is recorded as <code>{diagnostic, error}</code> in the output, with a closing note that the absent numbers “are not zero and not reassuring”. A run must never report fewer diagnostics than it attempted without saying so.</li>
+  <li><strong>A failed run keeps nothing.</strong> Any exception in fitting or setup marks the run <code>FAILED</code> with the reason. There is no path on which partial results masquerade as complete ones — the mirror image of the non-convergence-is-fatal rule from Part 4, applied at the process level.</li>
+  <li><strong>Jobs are idempotent.</strong> The worker re-reads the CSV by reference and overwrites results on a re-run, so a lost or stuck job is an operational nuisance, not data loss.</li>
+</ul>
+
+<p>On success the worker writes the fits (one row per model, with per-item parameter rows), the full diagnostics payload as a JSON blob, and the run-level notes, then sets <code>SUCCEEDED</code>. Parameter columns are nullable on purpose: an unconverged fit is stored <em>as</em> unconverged, because storing 0.0 where an SE was never estimated is how a report ends up claiming certainty it does not have — Part 1's “absence must not look like a value”, enforced by the schema.</p>
+
+<p>Access control has a subtlety here. HTTP handlers reach runs through an owner-scoped repository that cannot see other users' rows. The worker, which has no user, uses a separate class named <code>SystemRunAccess</code> — deliberately named apart, so unscoped access is a visible import in a review diff rather than an optional argument someone forgets to pass.</p>
+
+<h2>How the browser finds out: polling the durable record</h2>
+
+<p>There are no websockets. The run page polls <code>GET /analyses/{id}</code> every two seconds and stops when the status reaches <code>succeeded</code> or <code>failed</code>. The endpoint reads the database row — never the queue — which buys a property worth more than push latency: status survives restarts of the worker, the API, and the browser alike. The page itself tells the user it is safe to leave and come back. Results are fetched only after success; asking for them earlier returns 409, not an empty report.</p>
+
+<p>Two renderings of the results exist. The web UI reads the JSON results endpoint and renders the dossier, fit tables and DIF screens as interactive sections. Separately, <code>GET /analyses/{id}/report</code> returns a self-contained HTML report rendered server-side with Jinja. The report is <em>never stored</em>: it is re-rendered from the persisted results on each request, so a template fix retroactively improves every past run's report — nothing is ever recomputed, only re-presented. The template runs with <code>StrictUndefined</code>, so a renamed field fails loudly at render time instead of becoming a silently blank cell.</p>
+
+<h2>The tests, tiered by what they can prove</h2>
+
+<p>Part 4 ended with “how anyone knows this is right”; here is the machinery behind that claim, and its honest current state.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Tier</th><th>What it proves</th><th>When it runs</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><strong>Tier 1 — parameter recovery</strong></td><td>The estimator gets back parameters from data it simulated itself, for all seven families, plus SE calibration, missing data, and the refusal paths</td><td>Every push; gates merges</td><td>Running and passing</td></tr>
+<tr><td><strong>Postgres integration</strong></td><td>API routes, the worker pipeline, storage and config against a real PostgreSQL, including applying and reversing the migration</td><td>Every push</td><td>Running and passing</td></tr>
+<tr><td><strong>Tier 2 — agreement with R's <code>mirt</code></strong></td><td>The same fixed datasets fitted by an independently written estimator match within tight tolerances (e.g. 2PL b within 0.06)</td><td>Weekly schedule + manual trigger</td><td><strong>Has never run</strong></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Tier 2 exists because Tier 1 has a blind spot: simulator and estimator share this project's assumptions, so a shared misunderstanding of, say, the PCM would still “recover” perfectly. Fitting the same data with <code>mirt</code> — two programs, two languages, two authors, one likelihood — closes that gap, and is exactly what the International Test Commission guidelines ask of new analysis software. The tolerances are far tighter than Tier 1's because both programs maximise the same likelihood; residual disagreement is quadrature and convergence, not sampling error. R is not a runtime dependency — the tests skip when the reference file is absent, and there is no R in the Docker image.</p>
+
+<div class="box box-warn">
+<h4>Tier 2 has never actually run — and the repo says so</h4>
+<p>Two causes, both now recorded in <code>PROGRESS.md</code> rather than discoverable by surprise: the fixture CSVs were excluded by a <code>.gitignore</code> rule until recently, and GitHub fires scheduled workflows only from the default branch, which this branch has not reached. So “agrees with mirt” is currently a claim about code that has been read, not a job that has passed. The first scheduled run after merge is the thing to check. Two adjacent caveats in the same spirit: no automated test has ever had a <em>real</em> RQ worker dequeue a <em>real</em> Redis job (tests use fakeredis; Docker Compose is the only place that path executes), and no test has talked to a real S3 endpoint (moto in tests, MinIO in Compose).</p>
+</div>
+
+<h2>Configuration: the traps worth knowing in advance</h2>
+
+<p>All backend settings are environment variables with the prefix <code>IRTBOSS_</code>; unprefixed variables are silently ignored, which is precisely the mistake that broke the v1 compose file. The ones that bite:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Setting</th><th>Default</th><th>The trap</th></tr></thead>
+<tbody>
+<tr><td><code>IRTBOSS_ENVIRONMENT</code></td><td><code>development</code></td><td>Controls the <code>Secure</code> cookie flag and the production refusals. A staging deploy left at <code>development</code> serves session cookies over plaintext while otherwise working perfectly. Set it to <code>production</code> on every deployed environment, staging included.</td></tr>
+<tr><td><code>IRTBOSS_SECRET_KEY</code></td><td>a placeholder</td><td>The placeholder is rejected at startup in production — the app refuses to boot rather than sign sessions with a public string.</td></tr>
+<tr><td><code>IRTBOSS_STORAGE_BACKEND</code></td><td><code>local</code></td><td><code>local</code> is likewise refused in production, for the shared-filesystem reason above. <code>s3</code> requires a bucket; S3 credentials are read by boto3 from the standard AWS variables, never by this application.</td></tr>
+<tr><td><code>IRTBOSS_CORS_ALLOW_ORIGINS</code></td><td>the Vite dev origin</td><td><code>*</code> is rejected by a validator — a wildcard with credentialed requests is a browser-enforced contradiction anyway.</td></tr>
+<tr><td>Upload caps</td><td>25 MiB · 100k rows · 1k columns</td><td>These exist and return 413/422. A per-user quota is described in the architecture document but <strong>does not exist in code</strong> — do not rely on it.</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>In development the frontend talks to the API through Vite's proxy so the session cookie stays same-origin (<code>SameSite=Lax</code> needs no relaxation). The proxy targets <code>127.0.0.1:8000</code> explicitly rather than <code>localhost</code> — on IPv6-preferring machines Node resolves <code>localhost</code> to <code>::1</code> first and does not fall back, so a v4-only API becomes unreachable from the dev server while <code>curl</code>, which tries both, works — a genuinely misleading failure. Under Docker Compose the target is the <code>api</code> service instead, via <code>VITE_PROXY_TARGET</code>.</p>
+
+<h2>Deployment, and the gaps that are documented rather than hidden</h2>
+
+<p>The frontend deploys to Vercel as static files with an SPA rewrite. The API and worker deploy to Fly.io (Railway is the documented alternative) as two processes of one image; the release step runs the database migration; the health check probes a liveness endpoint that deliberately makes no database round trip. Postgres and Redis are managed services. The local equivalent is one Compose file that runs the whole stack — including MinIO standing in for S3, so the storage path you exercise locally is the one that deploys.</p>
+
+<p>Finally, the known gaps, in the open where they belong: login rate limiting is per-process (N instances multiply the effective limit; a Redis-backed limiter exists in the code but is deliberately unwired so login does not fail when Redis is down). There is no CSRF token — safe while the cookie stays <code>Lax</code> and no GET mutates state, neither of which a test currently enforces. Logout cannot revoke a bearer token before its 12-hour expiry; only a password change can. A job killed at the 1-hour timeout leaves its run stuck at <code>RUNNING</code> with no automatic reaper. And the Fly and Compose object-storage configurations have been verified by reading, not by running — the authoring machine has no Docker. Every one of these is in <code>DEPLOYMENT.md</code> or <code>PROGRESS.md</code>; the project treats “documented limitation” and “hidden defect” as different moral categories, and so should you.</p>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>One image, two processes: the API never estimates, the worker does nothing else, and lazy imports keep numpy out of the web process entirely.</li>
+  <li>Run status lives in PostgreSQL; Redis carries only job ids; the browser polls the durable row every two seconds and survives any restart doing so.</li>
+  <li>Files are stored by self-describing reference (<code>local:</code> / <code>s3://</code>), never by path, so a mis-deployment fails by name instead of masquerading as data corruption.</li>
+  <li>The run row is committed before the job is enqueued, and an enqueue failure leaves an accountable <code>QUEUED</code> row behind a 503.</li>
+  <li>A failed diagnostic is recorded inside a successful run; a failed run keeps nothing; unconverged fits are stored as unconverged, with nullable columns so absence can never impersonate a value.</li>
+  <li>Reports are re-rendered from persisted results on every request — template fixes apply retroactively, and <code>StrictUndefined</code> makes a renamed field fail loudly.</li>
+  <li>Tier 1 (self-recovery) and the Postgres integration tests run on every push; Tier 2 (independent agreement with <code>mirt</code>) is built, scheduled — and has never run, which the repo states plainly.</li>
+  <li>Sessions are Argon2id-backed signed cookies whose fingerprint dies with a password change; ownership is a column on every row; other users' runs return 404, not 403.</li>
+</ul>
+
+<nav class="pager">
+  <a href="09-applications.html"><span class="lbl">Previous</span>← Part 9 · Applications</a>
+  <a href="11-worked-example.html"><span class="lbl">Next</span>Part 11 · A real analysis →</a>
+</nav>
+
+</div>
+</body>
+</html>
