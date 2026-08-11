@@ -103,6 +103,7 @@ class AnalysisRepository:
         requested_models: list[str],
         seed: int,
         engine_version: str,
+        score_method: str,
     ) -> AnalysisRun:
         """Persist the run as QUEUED before anything is enqueued.
 
@@ -115,6 +116,7 @@ class AnalysisRepository:
             dataset_id=dataset_id,
             status=RunStatus.QUEUED,
             requested_models=requested_models,
+            score_method=score_method,
             seed=seed,
             engine_version=engine_version,
         )

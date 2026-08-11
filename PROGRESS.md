@@ -28,7 +28,7 @@ The v1 estimation stack — the R subprocess wrapper, its fabrication path, and 
 
 **Psychometrics** (`backend/app/psychometrics/`) — one implementation per quantity
 - Information, differentiated from each family's own category probabilities rather than hand-derived per family
-- Person scoring: EAP, MAP, WLE, each with a standard error
+- Person scoring: EAP, MAP, WLE, each with a standard error; chosen per run through the API, recorded on the run row, and stated in the notes with what the choice costs
 - Reliability: marginal Bayesian and information-based, empirical, McDonald's ω, conditional SEM curve, precision bands. No Cronbach's α.
 - Item fit: S-X² over a Lord–Wingersky rest-score distribution, infit, outfit, RMSD
 - Assumptions: polychoric matrix, parallel analysis, Velicer's MAP, bifactor ECV/PUC/ω<sub>h</sub> approximation; local independence by Q3\* against a bootstrapped critical value
@@ -122,7 +122,6 @@ These are real and none of them are hidden in the code. They belong here rather 
 - Consequence analysis (how much θ estimates, standard errors and cut-score classifications change across candidate models) is described in ARCHITECTURE §3.3 and is not implemented.
 - The Vuong test for non-nested pairs is not implemented. The held-out predictive log-likelihood answers the same question with one fewer asymptotic approximation; the refusal states this rather than hiding it.
 - Report export is HTML only. There is no PDF or JSON export endpoint.
-- The orchestrator scores respondents with EAP. MAP and WLE exist in the engine and are not selectable through the API.
 - The IRT likelihood-ratio DIF method fits both groups under a single latent population, so it is approximate under substantial group impact. The observed-score methods are the ones to trust there, and the limitation is documented in the module.
 - M2's power against 3PL guessing is modest: the 2PL absorbs the univariate margins almost exactly, so detecting a real lower asymptote needs roughly 25 items and n = 4000 at c = 0.35 before the statistic fires reliably. A non-significant M2 is not evidence against guessing.
 - The example datasets are simulated, so they exercise the platform without validating it. They are now generated from documented parameters with recorded seeds (see below), which makes them checkable but does not make them real response data. Nothing in this repository has been fitted to a real instrument.

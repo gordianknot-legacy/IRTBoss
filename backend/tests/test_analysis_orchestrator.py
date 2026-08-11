@@ -396,7 +396,7 @@ def test_the_worker_can_actually_call_this_orchestrator(tmp_path):
         "group_columns": ["cohort"],
     }
 
-    fits, diagnostics, notes = _analyse(store, ref, metadata, ["2pl"], 5)
+    fits, diagnostics, notes = _analyse(store, ref, metadata, ["2pl"], 5, "wle")
 
     assert len(fits) == 1 and fits[0].converged
     assert isinstance(diagnostics, dict) and isinstance(notes, list)
@@ -414,3 +414,51 @@ def test_no_models_requested_is_an_error():
     frame, _ = _frame(ModelKey.TWO_PL, 8, 200, seed=61)
     with pytest.raises(ValueError, match="no models were requested"):
         run_analysis(frame, [], seed=5)
+
+
+# --------------------------------------------------------------------------
+# scoring method
+# --------------------------------------------------------------------------
+
+
+def test_the_requested_scoring_method_is_used_and_recorded():
+    """WLE has to reach the scorer, not just the request.
+
+    The whole gap this closes is that MAP and WLE existed in the engine and were
+    unreachable, with EAP hardcoded in the orchestrator. So what is asserted is
+    that the choice changes the output: WLE does not shrink towards the population
+    mean, so its scores are more spread out than EAP's on the same fit. Asserting
+    only that the label came back would pass just as well if the argument were
+    dropped on the floor.
+    """
+    frame, _ = _frame(ModelKey.TWO_PL, 12, 400, seed=91)
+
+    eap = run_analysis(frame, ["2pl"], seed=5)
+    wle = run_analysis(frame, ["2pl"], seed=5, score_method="wle")
+
+    assert eap.diagnostics["score_method"] == "eap"
+    assert wle.diagnostics["score_method"] == "wle"
+    assert eap.diagnostics["person_scores"]["method"] == "eap"
+    assert wle.diagnostics["person_scores"]["method"] == "wle"
+
+    assert wle.diagnostics["person_scores"]["sd"] > eap.diagnostics["person_scores"]["sd"]
+    assert any("Warm" in note for note in wle.notes)
+    assert not any("Warm" in note for note in eap.notes)
+    assert any("expected a posteriori" in note.lower() for note in eap.notes)
+
+
+def test_map_is_reachable_too():
+    frame, _ = _frame(ModelKey.RASCH, 10, 300, seed=92)
+
+    result = run_analysis(frame, ["rasch"], seed=5, score_method="map")
+
+    assert result.diagnostics["score_method"] == "map"
+    assert result.diagnostics["person_scores"]["method"] == "map"
+
+
+def test_an_unknown_scoring_method_is_refused_rather_than_defaulted():
+    """Silently falling back to EAP would report a method nobody asked for."""
+    frame, _ = _frame(ModelKey.TWO_PL, 8, 200, seed=93)
+
+    with pytest.raises(ValueError):
+        run_analysis(frame, ["2pl"], seed=5, score_method="ml")

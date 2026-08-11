@@ -143,6 +143,51 @@ async def test_unsupported_model_key_is_rejected_before_enqueue(client, queue):
     assert queue.count == 0
 
 
+async def test_unsupported_score_method_is_rejected_before_enqueue(client, queue):
+    """Refused at the door rather than defaulted to EAP.
+
+    A run recorded as `wl` and scored as EAP would report a method nobody chose,
+    which is worse than a 422: the report would name an estimator that had not
+    been used.
+    """
+    token = await register(client)
+    dataset_id = await _dataset(client, token)
+    response = await client.post(
+        f"/api/v1/datasets/{dataset_id}/analyses",
+        json={"models": ["2pl"], "score_method": "wl"},
+        headers=auth(token),
+    )
+    assert response.status_code == 422
+    assert "score_method" in response.json()["detail"]
+    assert queue.count == 0
+
+
+async def test_the_score_method_is_recorded_on_the_run(client, queue):
+    token = await register(client)
+    dataset_id = await _dataset(client, token)
+
+    default = await client.post(
+        f"/api/v1/datasets/{dataset_id}/analyses",
+        json={"models": ["2pl"]},
+        headers=auth(token),
+    )
+    assert default.json()["score_method"] == "eap"
+
+    chosen = await client.post(
+        f"/api/v1/datasets/{dataset_id}/analyses",
+        json={"models": ["2pl"], "score_method": "WLE"},
+        headers=auth(token),
+    )
+    assert chosen.status_code == 202
+    # Normalised on the way in, so the stored value is comparable across runs.
+    assert chosen.json()["score_method"] == "wle"
+
+    polled = await client.get(
+        f"/api/v1/analyses/{chosen.json()['id']}", headers=auth(token)
+    )
+    assert polled.json()["score_method"] == "wle"
+
+
 # --- the job itself ------------------------------------------------------
 
 @dataclass
@@ -201,11 +246,12 @@ async def test_the_job_persists_what_the_orchestrator_returned(
 
     seen: dict = {}
 
-    def _run_analysis(data, models, groups=None, seed=None):
+    def _run_analysis(data, models, groups=None, seed=None, score_method="eap"):
         seen["shape"] = data.shape
         seen["columns"] = list(data.columns)
         seen["models"] = list(models)
         seen["seed"] = seed
+        seen["score_method"] = score_method
         return _FakeAnalysisResult(
             fits=[_fit()],
             diagnostics={"reliability": {"marginal": 0.81}},
@@ -223,6 +269,10 @@ async def test_the_job_persists_what_the_orchestrator_returned(
     assert seen["shape"] == (20, 3)
     assert seen["models"] == ["2pl"]
     assert seen["seed"] is not None
+    # The run's stored scoring method reaches the orchestrator. Defaulting it here
+    # instead would score every run by EAP while the run row said otherwise, which
+    # is the failure mode that looks like working software.
+    assert seen["score_method"] == "eap"
 
     from app.db.database import get_sessionmaker
 
@@ -258,7 +308,7 @@ async def test_the_job_persists_what_the_orchestrator_returned(
 async def test_a_failing_orchestrator_marks_the_run_failed(client, queue, engine, monkeypatch):
     token, run_id = await _queued_run(client, queue)
 
-    def _boom(data, models, groups=None, seed=None):
+    def _boom(data, models, groups=None, seed=None, score_method="eap"):
         raise RuntimeError("estimation diverged")
 
     _install_orchestrator(monkeypatch, _boom)
@@ -285,7 +335,7 @@ async def test_a_failing_orchestrator_marks_the_run_failed(client, queue, engine
 async def test_an_unconverged_fit_stores_nulls_not_zeros(client, queue, engine, monkeypatch):
     token, run_id = await _queued_run(client, queue)
 
-    def _unconverged(data, models, groups=None, seed=None):
+    def _unconverged(data, models, groups=None, seed=None, score_method="eap"):
         return _FakeAnalysisResult(
             fits=[
                 FitResult(

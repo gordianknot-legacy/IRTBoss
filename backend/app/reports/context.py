@@ -143,6 +143,7 @@ def build_context(
             "id": str(run.id),
             "status": getattr(run.status, "value", str(run.status)),
             "requested_models": list(run.requested_models or []),
+            "score_method": run.score_method,
             "seed": run.seed,
             "engine_version": run.engine_version,
             "created_at": run.created_at,
@@ -175,6 +176,11 @@ def build_context(
             "dataset_checksum_sha256": dataset.checksum_sha256,
             "dataset_filename": dataset.original_filename,
             "requested_models": list(run.requested_models or []),
+            # The requested method, from the run row. The score distribution
+            # section reports the method the scores were actually computed under;
+            # those agree unless scoring failed, and a reader has to be able to
+            # tell the two apart.
+            "score_method": run.score_method,
             "fitted_models": [f["model_key"] for f in fits],
             "run_id": str(run.id),
             "started_at": run.started_at,

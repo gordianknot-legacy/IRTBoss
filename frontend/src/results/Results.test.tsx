@@ -35,6 +35,7 @@ const run: AnalysisResult['run'] = {
   dataset_id: 'ds-1',
   status: 'succeeded',
   requested_models: ['rasch', '2pl'],
+  score_method: 'eap',
   seed: 20260803,
   engine_version: '2.0.0',
   created_at: '2026-08-06T09:00:00Z',

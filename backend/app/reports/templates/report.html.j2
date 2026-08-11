@@ -700,6 +700,8 @@
   <dd>{{ ctx.reproducibility.requested_models | join(', ') or ABSENT }}</dd>
   <dt>Models fitted</dt>
   <dd>{{ ctx.reproducibility.fitted_models | join(', ') or ABSENT }}</dd>
+  <dt>Person scoring requested</dt>
+  <dd>{{ ctx.reproducibility.score_method or ABSENT }}</dd>
   <dt>Started</dt><dd>{{ ctx.reproducibility.started_at | timestamp }}</dd>
   <dt>Finished</dt><dd>{{ ctx.reproducibility.finished_at | timestamp }}</dd>
 </dl>

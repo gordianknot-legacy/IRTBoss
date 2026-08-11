@@ -223,7 +223,7 @@ Conventional adequacy levels — 0.70 for group-level reporting, 0.90 for indivi
 
 All three skip missing responses per cell. A respondent who answered nothing is not scored, rather than being handed the prior mean, which would be a number about the population wearing a person's name. The count of unscorable respondents is part of the score summary.
 
-The analysis pipeline currently scores with EAP and reports a distribution summary. v1 produced no person parameters at all: its ability-estimation function had no call sites.
+The estimator is chosen per run — `score_method` on the analysis request, defaulting to EAP — recorded on the run row, and stated in the report's notes along with what that choice costs. The pipeline reports a distribution summary rather than one row per respondent, because the full θ vector is a per-respondent result and does not belong inlined in every payload. v1 produced no person parameters at all: its ability-estimation function had no call sites.
 
 ---
 

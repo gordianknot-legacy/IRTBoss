@@ -117,6 +117,8 @@ export interface AnalysisRun {
   dataset_id: string
   status: RunStatus
   requested_models: string[]
+  /** `ScoreMethod` value: `eap`, `map` or `wle`. Chosen at request time. */
+  score_method: string
   seed: number
   engine_version: string
   created_at: string

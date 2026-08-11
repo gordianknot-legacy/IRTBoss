@@ -66,6 +66,38 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SEED = 20260803
 
+# One note per estimator, stated up front because the choice is not cosmetic: it
+# moves the scores, the standard errors, the empirical reliability computed from
+# them, and — for MAP and WLE — whether the extremes are estimable at all. A
+# reader comparing two runs of the same data needs to know which was used and what
+# it does, without having to know the literature.
+_SCORE_METHOD_NOTES = {
+    ScoreMethod.EAP: (
+        "Respondents are scored by expected a posteriori (EAP) estimation: the "
+        "mean of each respondent's posterior. Every respondent with at least one "
+        "response gets a finite score, including perfect and zero scores, but the "
+        "estimates are shrunk towards the population mean — most visibly at the "
+        "extremes, where a perfect scorer is placed at a finite ability rather "
+        "than at the infinity the likelihood alone implies."
+    ),
+    ScoreMethod.MAP: (
+        "Respondents are scored by maximum a posteriori (MAP) estimation: the mode "
+        "of each respondent's posterior rather than its mean. It shares EAP's "
+        "shrinkage towards the population mean and differs from it wherever the "
+        "posterior is skewed, which is most of the range for a respondent who "
+        "answered few items."
+    ),
+    ScoreMethod.WLE: (
+        "Respondents are scored by weighted likelihood estimation (Warm's WLE), "
+        "which corrects the first-order bias of maximum likelihood without pulling "
+        "estimates towards the population mean. That makes it the choice when "
+        "individual scores are reported rather than aggregated — but its standard "
+        "errors are larger than EAP's, and the correction is a bias correction "
+        "rather than a prior, so extreme response patterns are estimated further "
+        "out than EAP would place them."
+    ),
+}
+
 
 @dataclass(frozen=True)
 class DiagnosticFailure:
@@ -192,12 +224,18 @@ def run_analysis(
     *,
     groups: pd.DataFrame | pd.Series | None = None,
     seed: int | None = None,
+    score_method: str | ScoreMethod = ScoreMethod.EAP,
 ) -> AnalysisResult:
     """Fit every requested model and compute the full diagnostic picture.
 
     ``data`` is one column per item, one row per respondent, containing the raw
     response codes as uploaded. ``groups`` is optional and, when present,
     supplies the grouping variables DIF is screened over.
+
+    ``score_method`` chooses the person-score estimator. It is a real choice with
+    consequences beyond the scores themselves — the empirical reliability and the
+    score distribution both follow from it — so which one was used is recorded in
+    the output and stated in the notes rather than left to be inferred.
 
     The result is always a complete description of what happened, including when
     that description is "nothing converged". There is no path on which this
@@ -206,6 +244,7 @@ def run_analysis(
 
     started = time.perf_counter()
     seed = DEFAULT_SEED if seed is None else int(seed)
+    method = ScoreMethod(score_method)
     notes: list[str] = []
     failures: list[DiagnosticFailure] = []
 
@@ -270,6 +309,8 @@ def run_analysis(
     if reference is not None:
         notes.append(rationale)
 
+    notes.append(_SCORE_METHOD_NOTES[method])
+
     # --- assumptions ----------------------------------------------------
     assumptions: dict[str, Any] = {}
     assumptions["unidimensionality"] = _attempt(
@@ -317,7 +358,7 @@ def run_analysis(
             lambda r=result: score(
                 matrix,
                 r.item_parameters,
-                ScoreMethod.EAP,
+                method,
                 latent_sd=r.latent_sd,
             ),
             failures,
@@ -357,6 +398,9 @@ def run_analysis(
         },
         "reference_model": reference.value if reference else None,
         "reference_model_rationale": rationale,
+        # Recorded even when scoring failed, so a reader can tell "WLE was asked
+        # for and could not be computed" from "EAP was used".
+        "score_method": method.value,
         "comparison": dossier,
         "assumptions": assumptions,
         "per_model": per_model,

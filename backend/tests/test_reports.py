@@ -119,6 +119,7 @@ def _rows(result, *, status="succeeded", stakes="high", use="certification"):
         id="11111111-1111-1111-1111-111111111111",
         status=status,
         requested_models=[f.model_key for f in map(_fit_row, result.fits)],
+        score_method=result.diagnostics.get("score_method", "eap"),
         seed=5,
         engine_version="2.0.0-test",
         created_at=datetime(2026, 8, 6, 9, 0, tzinfo=UTC),

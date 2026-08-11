@@ -272,6 +272,12 @@ class AnalysisRun(Base):
     # ModelKey values, kept as strings so a new family is a code change and not
     # a database migration.
     requested_models: Mapped[list] = mapped_column(JSONType, nullable=False, default=list)
+    # A ScoreMethod value. A plain string for the same reason as the models above,
+    # and because `app.psychometrics` imports numpy: this module must stay
+    # importable by the web process without dragging the numerical stack in.
+    score_method: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="eap", server_default="eap"
+    )
     seed: Mapped[int] = mapped_column(Integer, nullable=False)
     engine_version: Mapped[str] = mapped_column(String(64), nullable=False)
     # RQ job id, for operator forensics only. The API never reads run state from
