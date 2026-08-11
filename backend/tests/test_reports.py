@@ -181,7 +181,28 @@ def test_a_real_analysis_renders(html):
     assert "Model comparison" in html
     assert "Item fit" in html
     assert "Assumptions" in html
+    assert "Does the model choice change anything?" in html
     assert "Reproducing this analysis" in html
+
+
+def test_the_consequence_section_carries_its_numbers(analysis, html):
+    """Not just the heading: the statistics and the verdict have to reach the page.
+
+    A section that renders its prose and drops its table is worse than no section,
+    because the prose promises an answer the reader cannot check.
+    """
+    payload = analysis.diagnostics["consequence"]
+    pair = payload["pairs"][0]
+
+    assert payload["verdict"] in html
+    assert f"{pair['model_a']} vs {pair['model_b']}" in html
+    assert num(pair["pearson_r"], 4) in html
+    assert num(pair["p95_absolute_difference"], 3) in html
+    # And the standardisation is disclosed where the numbers are, not only in a
+    # note somebody may not reach.
+    assert "standard deviations of this sample" in html
+    for entry in pair["reclassification"]:
+        assert percent(entry["selection_rate"], 0) in html
 
 
 def test_the_report_never_names_a_best_model(html):

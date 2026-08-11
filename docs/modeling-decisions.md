@@ -275,7 +275,7 @@ The report is rendered from the persisted run alone. Nothing is recomputed at re
 | The Vuong test | Held-out prediction answers the same question with one fewer approximation |
 | Multidimensional IRT | Requires domain expertise to specify dimensions; misspecification risk is high |
 | Computerised adaptive testing | Different product: item bank management and real-time scoring |
-| Consequence analysis across models | Described in ARCHITECTURE §3.3; not built yet |
+| Consequence analysis across models | Built: `psychometrics/consequence.py`. Per pair of models — score correlation and rank agreement, differences in sample-SD units after standardising each model's metric, a median SE ratio, and reclassification at illustrative selection rates with Cohen's κ. Verdict thresholds are stated as conventions, with the computed numbers beside them |
 
 ---
 

@@ -51,6 +51,7 @@ from app.irt import (
 from app.psychometrics import (
     ScoreMethod,
     compare,
+    consequence,
     global_fit,
     item_fit,
     reliability,
@@ -335,6 +336,10 @@ def run_analysis(
     # --- per-model diagnostics ------------------------------------------
     per_model: dict[str, Any] = {}
     scores_summary: dict[str, Any] | None = None
+    # Kept per model rather than only for the reference, because consequence
+    # analysis is a comparison between what each model would decide and cannot be
+    # reconstructed from one model's summary.
+    all_scores: dict[ModelKey, Any] = {}
 
     for key, result in converged.items():
         entry: dict[str, Any] = {}
@@ -371,10 +376,30 @@ def run_analysis(
             failures,
         )
 
+        if person_scores is not None:
+            all_scores[key] = person_scores
         if key == reference and person_scores is not None:
             scores_summary = _score_summary(person_scores)
 
         per_model[key.value] = entry
+
+    # --- consequence analysis -------------------------------------------
+    consequences = None
+    if len(all_scores) >= 2:
+        consequences = _attempt(
+            "consequence",
+            lambda: consequence(all_scores),
+            failures,
+        )
+        if consequences is not None:
+            notes.append(
+                "Consequence analysis reports how much the candidate models "
+                "disagree about individual respondents rather than about fit. It "
+                "is the answer to a question the comparison dossier deliberately "
+                "does not settle: if the models would rank and select the same "
+                "people, the choice between them changes no conclusion, and that "
+                "is worth more than a winner nobody can defend."
+            )
 
     # --- DIF ------------------------------------------------------------
     dif_report = None
@@ -402,6 +427,7 @@ def run_analysis(
         # for and could not be computed" from "EAP was used".
         "score_method": method.value,
         "comparison": dossier,
+        "consequence": consequences,
         "assumptions": assumptions,
         "per_model": per_model,
         "person_scores": scores_summary,

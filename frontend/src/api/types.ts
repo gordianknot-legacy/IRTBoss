@@ -525,12 +525,59 @@ export interface PerModelDiagnostics {
   reliability: ReliabilityReport | null
 }
 
+/* --- consequence (psychometrics/consequence.py) -------------------------- */
+
+export interface Reclassification {
+  selection_rate: number
+  /** Both counts, because they can differ: a tie group straddling the cut is
+   *  taken whole rather than split, so part of `n_reclassified` can be that
+   *  boundary rather than a disagreement about anyone's standing. */
+  n_selected_a: number
+  n_selected_b: number
+  n_reclassified: number
+  proportion_reclassified: number | null
+  kappa: number | null
+}
+
+export interface PairwiseConsequence {
+  model_a: string
+  model_b: string
+  n_compared: number
+  pearson_r: number | null
+  spearman_rho: number | null
+  /** All four in standard deviations of this sample — each model's scores are
+   *  standardised first, because Rasch and PCM leave the latent variance free
+   *  and a raw difference would report that convention as a finding. */
+  mean_absolute_difference: number | null
+  rms_difference: number | null
+  p95_absolute_difference: number | null
+  max_absolute_difference: number | null
+  /** Median SE_b / SE_a, after the same standardisation. */
+  se_ratio_median: number | null
+  reclassification: Reclassification[]
+  max_proportion_reclassified: number | null
+}
+
+export interface ConsequenceReport {
+  models: string[]
+  n_respondents_compared: number
+  score_method: string
+  selection_rates: number[]
+  pairs: PairwiseConsequence[]
+  /** `null` when there was nothing to compare. Absence is not stability. */
+  stable: boolean | null
+  verdict: string
+  notes: string[]
+}
+
 export interface Diagnostics {
   sample: SampleSummary
   validation: ValidationSummary
   reference_model: string | null
   reference_model_rationale: string
+  score_method: string
   comparison: ComparisonDossier | null
+  consequence: ConsequenceReport | null
   assumptions: Assumptions
   /** Keyed by model key; only models that converged appear. */
   per_model: Record<string, PerModelDiagnostics>

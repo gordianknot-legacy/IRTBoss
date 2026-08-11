@@ -135,11 +135,13 @@ AIC <span class="op">=</span> <span class="op">−</span>2<var>ℓ</var> <span c
 
 <p>The Vuong test compares non-nested models via a normal-approximation statistic. It is not implemented, and the refusal states why: the held-out predictive log-likelihood answers the same question with <strong>one fewer asymptotic approximation</strong>. Where a tool could offer two routes to the same conclusion and one rests on weaker assumptions, offering both invites the reader to pick the one that agrees with them.</p>
 
-<h3>Consequence analysis — a real gap</h3>
+<h3>Consequence analysis</h3>
 
-<p>The most useful thing this section could add is described in <a href="../v2/ARCHITECTURE.md">ARCHITECTURE.md</a> §3.3 and <strong>is not built</strong>: an analysis of how much the choice of model actually changes what you would do. Concretely — across candidate models, how much do individual <var>θ</var> estimates move, how much do their standard errors change, and how many people cross a cut score?</p>
+<p>The most useful thing this section adds is described in <a href="../v2/ARCHITECTURE.md">ARCHITECTURE.md</a> §3.3: how much the choice of model actually changes what you would do. Concretely — across candidate models, how much do individual <var>θ</var> estimates move, how much do their standard errors change, and how many people cross a cut?</p>
 
-<p>That is the question a decision-maker has. If two models are statistically distinguishable but reclassify nobody, the choice is academic. If they are indistinguishable yet move 8% of candidates across a pass mark, the choice is the most consequential decision in the analysis, and the indistinguishability verdict is precisely the wrong reason to relax. This gap is listed in <a href="../../PROGRESS.md">PROGRESS.md</a>, and until it is filled, the check has to be done by hand.</p>
+<p>Two details make it trustworthy. Differences are reported <strong>after standardising each model's scores</strong>, because Rasch leaves the latent variance free and a raw θ difference between a Rasch and a 2PL fit would measure the identification convention rather than any disagreement — a large spurious “consequence” on the most common pair of models anyone requests. And classification is compared at a fixed <strong>selection rate</strong> rather than a fixed θ cut, which is scale-free and asks the question a programme with a quota actually has: not how many are selected, but who.</p>
+
+<p>That is the question a decision-maker has. If two models are statistically distinguishable but reclassify nobody, the choice is academic. If they are indistinguishable yet move 8% of candidates across a pass mark, the choice is the most consequential decision in the analysis, and the indistinguishability verdict is precisely the wrong reason to relax. Note what the stability verdict does <em>not</em> say: that the models fit equally well. It says they would decide the same things about these respondents, which is a different and more practical claim.</p>
 
 <h2>How to read a dossier: a worked procedure</h2>
 
@@ -149,7 +151,7 @@ AIC <span class="op">=</span> <span class="op">−</span>2<var>ℓ</var> <span c
   <li><strong>Read the disagreement matrix.</strong> Agreement strengthens the conclusion. Disagreement localises what is in dispute — usually whether some extra parameters are worth their cost.</li>
   <li><strong>Read the refusals.</strong> A refused likelihood-ratio test is information: it tells you the comparison you were about to make was not available. Do not route around it.</li>
   <li><strong>Check parsimony against purpose.</strong> Simpler models transfer better, equate more easily and are easier to explain. Among indistinguishable models, that is a legitimate basis for choosing.</li>
-  <li><strong>Do the consequence check by hand.</strong> Score your respondents under each candidate and count how many cross your cut. Until consequence analysis exists in the tool, this is the step that turns a statistical comparison into a decision.</li>
+  <li><strong>Read the consequence section.</strong> How many respondents change side of a cut between candidates, and by how much do their scores move? This is the step that turns a statistical comparison into a decision, and it is the one that can end the argument: if nobody changes hands, the selection question is moot.</li>
 </ol>
 
 <h2>What you now know</h2>
@@ -162,7 +164,7 @@ AIC <span class="op">=</span> <span class="op">−</span>2<var>ℓ</var> <span c
   <li>Rasch/1PL and GRM/GPCM are not nested pairs, despite equal parameter counts.</li>
   <li>Disagreement between criteria is reported, not resolved.</li>
   <li>A reference model is designated for item diagnostics with a recorded rationale, and that is explicitly not a verdict.</li>
-  <li>Consequence analysis — how much the model choice changes decisions — is the significant missing piece, and must be done by hand for now.</li>
+  <li>Consequence analysis asks how much the model choice changes decisions — scores standardised to a common metric, classification compared at a fixed selection rate — and a stable verdict is about decisions rather than about fit.</li>
 </ul>
 
 <nav class="pager">

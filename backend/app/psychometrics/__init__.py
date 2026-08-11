@@ -19,6 +19,12 @@ from .comparison import (
     ModelEvidence,
     compare,
 )
+from .consequence import (
+    ConsequenceReport,
+    PairwiseConsequence,
+    Reclassification,
+    consequence,
+)
 from .globalfit import GlobalFitResult, global_fit
 from .information import (
     category_probabilities,
@@ -33,6 +39,7 @@ from .scoring import PersonScores, ScoreMethod, score
 
 __all__ = [
     "ComparisonDossier",
+    "ConsequenceReport",
     "Disagreement",
     "FoldResult",
     "GlobalFitResult",
@@ -40,12 +47,15 @@ __all__ = [
     "ItemFitResult",
     "LikelihoodRatioTest",
     "ModelEvidence",
+    "PairwiseConsequence",
     "PersonScores",
     "PrecisionBand",
+    "Reclassification",
     "ReliabilityReport",
     "ScoreMethod",
     "category_probabilities",
     "compare",
+    "consequence",
     "global_fit",
     "item_fit",
     "item_information",

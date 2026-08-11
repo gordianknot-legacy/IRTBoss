@@ -62,7 +62,9 @@ const sparse: Diagnostics = {
   validation: { recoding: {}, dropped_items: [], n_persons_dropped: 0 },
   reference_model: null,
   reference_model_rationale: 'No model converged, so no item-level diagnostics could be computed.',
+  score_method: 'eap',
   comparison: null,
+  consequence: null,
   assumptions: emptyAssumptions,
   per_model: {},
   person_scores: null,
@@ -168,6 +170,55 @@ const tied: Diagnostics = {
   },
 }
 
+
+/** A run whose models disagree about individual respondents. */
+const consequential: Diagnostics = {
+  ...tied,
+  consequence: {
+    models: ['rasch', '2pl'],
+    n_respondents_compared: 300,
+    score_method: 'eap',
+    selection_rates: [0.1, 0.25],
+    pairs: [
+      {
+        model_a: 'rasch',
+        model_b: '2pl',
+        n_compared: 300,
+        pearson_r: 0.9812,
+        spearman_rho: 0.9744,
+        mean_absolute_difference: 0.121,
+        rms_difference: 0.164,
+        p95_absolute_difference: 0.352,
+        max_absolute_difference: 0.61,
+        se_ratio_median: 1.04,
+        reclassification: [
+          {
+            selection_rate: 0.1,
+            n_selected_a: 36,
+            n_selected_b: 30,
+            n_reclassified: 8,
+            proportion_reclassified: 0.0267,
+            kappa: 0.861,
+          },
+          {
+            selection_rate: 0.25,
+            n_selected_a: 75,
+            n_selected_b: 75,
+            n_reclassified: 21,
+            proportion_reclassified: 0.07,
+            kappa: 0.813,
+          },
+        ],
+        max_proportion_reclassified: 0.07,
+      },
+    ],
+    stable: false,
+    verdict:
+      'At worst 7.0% of respondents changed side of a selection cut (rasch vs 2pl). That exceeds at least one of the thresholds this report uses.',
+    notes: ['Differences are in standard deviations of this sample.'],
+  },
+}
+
 describe('<Results>', () => {
   it('renders a run where almost every diagnostic failed, and says so up front', () => {
     wrap({ run, fits: [], diagnostics: sparse })
@@ -214,6 +265,29 @@ describe('<Results>', () => {
   it('shows the reference-model rationale as prose', () => {
     wrap({ run, fits: [], diagnostics: tied })
     expect(screen.getByText(/statistically indistinguishable on that criterion/i)).toBeTruthy()
+  })
+
+
+  it('reports what the model choice costs, verbatim and with its numbers', () => {
+    wrap({ run, fits: [], diagnostics: consequential })
+
+    expect(screen.getByText(/changed side of a selection cut/)).toBeTruthy()
+    expect(screen.getByText('decisions differ')).toBeTruthy()
+    // The statistics reach the table, not just the prose.
+    expect(screen.getByText('0.9812')).toBeTruthy()
+    expect(screen.getByText('0.352')).toBeTruthy()
+    // Both selection counts, because they differ and the difference is a tie
+    // boundary rather than a disagreement about anyone.
+    expect(screen.getByText('36')).toBeTruthy()
+    expect(screen.getByText('30')).toBeTruthy()
+  })
+
+  it('does not let a missing consequence analysis read as stability', () => {
+    wrap({ run, fits: [], diagnostics: tied })
+
+    expect(screen.getByText(/No consequence analysis was produced/i)).toBeTruthy()
+    expect(screen.getByText(/has not been checked here/i)).toBeTruthy()
+    expect(screen.queryByText('decisions stable')).toBeNull()
   })
 
   it('refuses to invent a report when the payload has no diagnostics', () => {
