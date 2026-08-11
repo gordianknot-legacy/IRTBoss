@@ -125,6 +125,52 @@ jobs:
           pytest tests/test_api_*.py tests/test_worker_pipeline.py
           tests/test_config_and_schema.py tests/test_storage.py -q
 
+  # The queue path, against a Redis this test did not invent. Separate from the
+  # jobs above because it is the only one that needs a broker, and because a
+  # failure here means something specific: the enqueue seam is fine everywhere
+  # else in the suite (fakeredis proves that much), so what broke is the worker
+  # process, the fork, or the child's own database connection.
+  queue:
+    name: Queue round trip on real Redis
+    runs-on: ubuntu-latest
+    # The job carries an hour-long RQ timeout, so a hung analysis would otherwise
+    # burn the whole runner allowance before anyone saw it.
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.lock
+
+      - name: Run the queue round trip
+        env:
+          IRTBOSS_TEST_REDIS_URL: redis://localhost:6379/0
+        # `-p no:cacheprovider` because the forking worker inherits pytest's
+        # state, and two processes writing the same cache directory is a race
+        # that has nothing to do with what is being tested.
+        run: pytest tests/test_queue_real_redis.py -q -p no:cacheprovider
+
   # Tier 2: agreement with an independent implementation of the same models.
   # Scheduled rather than per-push because installing R and compiling mirt
   # dominates the runtime.
