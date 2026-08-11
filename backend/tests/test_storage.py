@@ -228,9 +228,10 @@ async def test_upload_and_worker_round_trip_with_no_shared_filesystem(
 
     seen: dict = {}
 
-    def _run_analysis(data, models, groups=None, seed=None):
+    def _run_analysis(data, models, groups=None, seed=None, score_method="eap"):
         seen["columns"] = list(data.columns)
         seen["shape"] = data.shape
+        seen["score_method"] = score_method
         return types.SimpleNamespace(fits=[], diagnostics={}, notes=[])
 
     module = types.ModuleType("app.analysis")
