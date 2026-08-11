@@ -10,4 +10,4 @@ This package provides the core backend functionality for:
 - Report generation
 """
 
-__version__ = "0.1.0"
+__version__ = "2.0.0"

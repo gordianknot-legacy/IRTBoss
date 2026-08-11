@@ -1,161 +1,156 @@
+"""Application settings.
+
+Everything the application needs to talk to the outside world is declared here
+and nowhere else. v1 read ``os.getenv`` at import time in four modules with
+different defaults, which is how it ended up shipping ``allow_origins=["*"]``
+alongside ``allow_credentials=True`` and an upload path that no configuration
+could move (P5).
+
+Two rules this module enforces rather than documents:
+
+1. **No usable default for a secret.** ``secret_key`` has a development
+   placeholder that is rejected outright when ``environment == "production"``,
+   so a deployment that forgot to set it fails to start instead of signing
+   session tokens with a value that is in the git history.
+2. **CORS is an allowlist.** ``cors_allow_origins`` defaults to the local dev
+   origin. ``"*"`` is rejected by a validator, because the combination the
+   product needs (cookies) is one browsers refuse against a wildcard anyway.
+
+Upload caps live here too: v1 read whole request bodies into RAM with no size,
+row or column bound (P5), so the limits have to be a first-class, testable
+setting rather than a constant buried in a route.
+
+A third rule joins them, for the same reason as the first: **local upload storage
+is refused in production.** A directory shared between the API and the worker
+works only while the two processes sit on one machine, and the failure when they
+do not is a run that dies with a missing file — which reads as corrupted data
+rather than as a deployment mistake. That is a thing to fail at start-up over,
+not to discover from a support request.
 """
-Configuration for IRTBoss core components.
 
-This module defines thresholds, defaults, and guardrails used throughout
-the analysis pipeline. These values are based on psychometric best practices
-and are intentionally not user-configurable to maintain valid analyses.
-"""
+from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Final
+from functools import lru_cache
+from pathlib import Path
+from typing import Annotated, Literal
 
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-class StakesLevel(Enum):
-    """Assessment stakes level - affects recommendation stringency."""
-    LOW = "low"         # Classroom quizzes, practice tests
-    MEDIUM = "medium"   # Course grades, placement tests
-    HIGH = "high"       # Certification, licensure, high-stakes decisions
+# Sentinel value. Present so that `pytest` and `uvicorn --reload` work with an
+# empty environment; refused in production by `_reject_default_secret`.
+DEV_PLACEHOLDER_SECRET = "dev-insecure-do-not-use-in-production"
 
 
-class IntendedUse(Enum):
-    """Intended use of the assessment - affects recommendation criteria."""
-    RESEARCH = "research"           # Academic research, exploratory
-    OPERATIONAL = "operational"     # Regular use in production
-    CERTIFICATION = "certification" # High-stakes certification/licensure
+class Settings(BaseSettings):
+    """Runtime configuration, populated from the environment or a ``.env``."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="IRTBOSS_",
+        extra="ignore",
+    )
+
+    environment: str = "development"
+
+    # --- persistence -----------------------------------------------------
+    # Async driver URLs only. The worker runs the same URL through asyncio,
+    # so there is no second sync driver to forget from requirements (P5 killed
+    # the v1 worker exactly that way, with a psycopg2 import that was never
+    # declared).
+    database_url: str = "postgresql+asyncpg://irtboss:irtboss@localhost:5432/irtboss"
+    redis_url: str = "redis://localhost:6379/0"
+    sql_echo: bool = False
+
+    # --- auth ------------------------------------------------------------
+    secret_key: SecretStr = SecretStr(DEV_PLACEHOLDER_SECRET)
+    session_ttl_seconds: int = 60 * 60 * 12
+    session_cookie_name: str = "irtboss_session"
+    # Login throttling. In-process by default; see app.auth.ratelimit for the
+    # multi-worker caveat.
+    login_max_attempts: int = 10
+    login_window_seconds: int = 300
+
+    # --- uploads ---------------------------------------------------------
+    max_upload_bytes: int = 25 * 1024 * 1024
+    max_rows: int = 100_000
+    max_columns: int = 1_000
+
+    # --- upload storage --------------------------------------------------
+    # See app/storage/. `local` is for development and tests and is rejected
+    # below in production. S3 credentials are *not* settings: botocore's own
+    # chain (environment, shared config, instance role) resolves them, so there
+    # is one place to look for them and one fewer secret for this file to avoid
+    # logging.
+    storage_backend: Literal["local", "s3"] = "local"
+    upload_dir: Path = Path("var/uploads")  # root for the local backend only
+    s3_bucket: str | None = None
+    s3_prefix: str = ""
+    s3_endpoint_url: str | None = None  # set for R2, B2, MinIO; omit for AWS
+    s3_region: str | None = None
+
+    # --- HTTP ------------------------------------------------------------
+    # `NoDecode` because pydantic-settings would otherwise insist on JSON for a
+    # list-typed env var, before `_split_origins` gets to accept a plain
+    # comma-separated string.
+    cors_allow_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
+
+    @field_validator("cors_allow_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        # Env vars arrive as a single string; accept comma separation so the
+        # allowlist is expressible without JSON quoting in a shell.
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return value
+
+    @field_validator("cors_allow_origins")
+    @classmethod
+    def _reject_wildcard_origin(cls, value: list[str]) -> list[str]:
+        if any(origin.strip() == "*" for origin in value):
+            raise ValueError(
+                "cors_allow_origins must be an explicit allowlist; '*' is not "
+                "usable with credentialed requests and was the v1 defect"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _reject_default_secret(self) -> Settings:
+        if self.is_production and self.secret_key.get_secret_value() == DEV_PLACEHOLDER_SECRET:
+            raise ValueError(
+                "IRTBOSS_SECRET_KEY must be set to a real value in production"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _reject_unusable_storage(self) -> Settings:
+        if self.storage_backend == "s3" and not self.s3_bucket:
+            raise ValueError(
+                "IRTBOSS_S3_BUCKET must be set when IRTBOSS_STORAGE_BACKEND is 's3'"
+            )
+        if self.is_production and self.storage_backend == "local":
+            raise ValueError(
+                "local upload storage is not usable in production: the API and the "
+                "worker would have to share a filesystem, and a worker that does "
+                "not fails the run with a missing file. Set "
+                "IRTBOSS_STORAGE_BACKEND=s3 and IRTBOSS_S3_BUCKET"
+            )
+        return self
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() in {"production", "prod"}
 
 
-@dataclass(frozen=True)
-class SampleSizeThresholds:
+@lru_cache
+def get_settings() -> Settings:
+    """Process-wide settings.
+
+    Cached so that a request handler does not re-read the environment, and so
+    that tests can clear the cache to install a different configuration.
     """
-    Minimum sample sizes for reliable IRT estimation.
 
-    These thresholds are based on simulation studies in the psychometric
-    literature. Below these thresholds, parameter estimates become unstable.
-    """
-    # Absolute minimums - below these, we refuse to fit
-    MINIMUM_RESPONDENTS: int = 100
-    MINIMUM_ITEMS: int = 5
-
-    # Warnings - fitting is possible but results may be unstable
-    WARNING_RESPONDENTS_1PL: int = 200
-    WARNING_RESPONDENTS_2PL: int = 250
-    WARNING_RESPONDENTS_3PL: int = 500
-
-    # Recommended - for reliable estimation
-    RECOMMENDED_RESPONDENTS_1PL: int = 300
-    RECOMMENDED_RESPONDENTS_2PL: int = 500
-    RECOMMENDED_RESPONDENTS_3PL: int = 1000
-
-
-@dataclass(frozen=True)
-class DataQualityThresholds:
-    """
-    Thresholds for data quality checks.
-
-    These values trigger warnings or errors during data validation.
-    """
-    # Missing data thresholds
-    MAX_MISSING_PER_ITEM: float = 0.20      # 20% missing per item
-    MAX_MISSING_PER_RESPONDENT: float = 0.30 # 30% missing per respondent
-    MAX_MISSING_TOTAL: float = 0.10          # 10% total missing data
-
-    # Response pattern thresholds
-    MIN_ITEM_VARIANCE: float = 0.05  # Items must have some variation
-    MAX_ITEM_MEAN: float = 0.95      # Items too easy (ceiling effect)
-    MIN_ITEM_MEAN: float = 0.05      # Items too hard (floor effect)
-
-    # Polytomous data thresholds
-    MIN_CATEGORY_FREQUENCY: float = 0.01  # Each category needs some responses
-
-
-@dataclass(frozen=True)
-class ModelFitThresholds:
-    """
-    Thresholds for evaluating model fit.
-
-    These are used to flag problematic items or models.
-    """
-    # Item parameter bounds
-    MIN_DISCRIMINATION: float = 0.25    # Below this, item doesn't discriminate
-    MAX_DISCRIMINATION: float = 4.0     # Above this, likely estimation issue
-    MIN_DIFFICULTY: float = -4.0        # Extreme low difficulty
-    MAX_DIFFICULTY: float = 4.0         # Extreme high difficulty
-    MAX_GUESSING: float = 0.35          # Reasonable upper bound for guessing
-
-    # Model comparison thresholds
-    AIC_DIFFERENCE_MEANINGFUL: float = 10.0  # Difference to prefer one model
-    BIC_DIFFERENCE_MEANINGFUL: float = 10.0  # BIC difference threshold
-
-    # Convergence criteria
-    MAX_ITERATIONS: int = 500
-    CONVERGENCE_THRESHOLD: float = 0.001
-
-
-@dataclass(frozen=True)
-class ReportingThresholds:
-    """
-    Thresholds that affect reporting and recommendations.
-    """
-    # Reliability thresholds
-    MIN_RELIABILITY_LOW_STAKES: float = 0.70
-    MIN_RELIABILITY_MEDIUM_STAKES: float = 0.80
-    MIN_RELIABILITY_HIGH_STAKES: float = 0.90
-
-    # Test information thresholds
-    MIN_INFORMATION_COVERAGE: float = 0.80  # % of theta range with adequate info
-
-
-# Global configuration instances
-SAMPLE_SIZE = SampleSizeThresholds()
-DATA_QUALITY = DataQualityThresholds()
-MODEL_FIT = ModelFitThresholds()
-REPORTING = ReportingThresholds()
-
-
-# Response type detection
-DICHOTOMOUS_VALUES: Final[set] = {0, 1}
-POLYTOMOUS_MIN_CATEGORIES: Final[int] = 3
-
-
-def get_min_sample_for_model(model_type: str) -> int:
-    """
-    Get minimum recommended sample size for a given model type.
-
-    Args:
-        model_type: One of "1PL", "2PL", "3PL"
-
-    Returns:
-        Minimum recommended sample size
-
-    Raises:
-        ValueError: If model_type is not recognized
-    """
-    thresholds = {
-        "1PL": SAMPLE_SIZE.RECOMMENDED_RESPONDENTS_1PL,
-        "2PL": SAMPLE_SIZE.RECOMMENDED_RESPONDENTS_2PL,
-        "3PL": SAMPLE_SIZE.RECOMMENDED_RESPONDENTS_3PL,
-    }
-    if model_type not in thresholds:
-        raise ValueError(f"Unknown model type: {model_type}. Must be one of: 1PL, 2PL, 3PL")
-    return thresholds[model_type]
-
-
-def get_reliability_threshold(stakes: StakesLevel) -> float:
-    """
-    Get minimum acceptable reliability for a given stakes level.
-
-    Higher stakes assessments require higher reliability.
-
-    Args:
-        stakes: The stakes level of the assessment
-
-    Returns:
-        Minimum acceptable reliability coefficient
-    """
-    thresholds = {
-        StakesLevel.LOW: REPORTING.MIN_RELIABILITY_LOW_STAKES,
-        StakesLevel.MEDIUM: REPORTING.MIN_RELIABILITY_MEDIUM_STAKES,
-        StakesLevel.HIGH: REPORTING.MIN_RELIABILITY_HIGH_STAKES,
-    }
-    return thresholds[stakes]
+    return Settings()

@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 9 · Where this is used, and where it should not be</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 9 of 12</p>
+  <h1>Where this is used, and where it should not be</h1>
+  <ul class="tracks">
+    <li class="track track-stake">Stakeholder</li>
+    <li class="track track-user">Analyst</li>
+  </ul>
+  <p class="lede">IRT is not an academic curiosity — it decides university admissions, medical licences and national education policy. This part surveys the real applications, the sample sizes each needs, and an honest account of what IRTBoss is not built to do.</p>
+</header>
+
+<h2>Education: large-scale assessment</h2>
+
+<p>This is IRT’s home ground and the reason it was developed. National and international assessments rest on it:</p>
+
+<ul>
+  <li><strong>NAEP</strong> (the US National Assessment of Educational Progress) has used IRT scaling since the mid-1980s to report trends over decades on a common scale, despite the items changing every cycle.</li>
+  <li><strong>PISA</strong>, run by the OECD, uses Rasch-family scaling across dozens of countries and many language versions — a setting where DIF analysis is not optional but central, because an item that behaves differently in translation would corrupt a country comparison.</li>
+  <li><strong>TIMSS</strong> and <strong>PIRLS</strong> similarly depend on IRT for cross-national and cross-time comparability.</li>
+</ul>
+
+<p>Two features of IRT make these possible and are worth naming. <strong>Rotated booklet designs</strong>: no student sees every item, because the item pool is far larger than any one test session. IRT handles the resulting sparse matrix natively — missing responses are skipped per cell (Part 4), not imputed. And <strong>trend reporting</strong>: because items and people share a scale, this year’s cohort can be placed on the same metric as one from twenty years ago through a set of common items.</p>
+
+<h3>Classroom and formative assessment</h3>
+
+<p>The same machinery works at smaller scale for item banking: calibrate a pool of items once, then assemble tests from it with a known information function. The practical payoff is being able to say in advance “this 20-item form will measure the pass/fail region with a standard error of 0.35” instead of discovering the test’s properties after administering it.</p>
+
+<h2>Licensure and certification</h2>
+
+<p>Medical boards, legal bar examinations, professional certifications and trade licences use IRT for a specific reason: they must administer many different forms of the same examination, over years, and defend the claim that the standard has not moved.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Requirement</th><th>What IRT provides</th></tr></thead>
+<tbody>
+<tr><td>Multiple forms with an identical standard</td><td>Equating through common items on a shared scale</td></tr>
+<tr><td>A defensible cut score</td><td>Standard-setting methods (Angoff, bookmark) that map judgements onto the θ scale, with the precision at the cut reported explicitly</td></tr>
+<tr><td>Precision where the decision is made</td><td>Information targeted at the cut score rather than spread evenly (Part 5)</td></tr>
+<tr><td>Legal defensibility</td><td>Documented DIF screening, item fit evidence and per-candidate standard errors</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>The precision-at-the-cut point deserves emphasis, because it is where Part 5’s figure becomes a legal matter. A classical reliability of 0.90 says nothing about the standard error at a cut score of θ = 1.5. If your items cluster in the middle, the candidates nearest the decision boundary are the ones measured worst — and they are exactly the ones who appeal.</p>
+
+<h2>Health outcomes and patient-reported measures</h2>
+
+<p>The NIH-funded <strong>PROMIS</strong> initiative (Patient-Reported Outcomes Measurement Information System) rebuilt patient-reported health measurement on IRT foundations in the 2000s, calibrating large banks of items for domains like pain interference, fatigue, physical function and depression.</p>
+
+<p>The clinical payoff is concrete. Because the items are on a common scale, a four-item short form and a computer-adaptive version report on the <em>same</em> metric, so a busy clinic and a research study can use different instruments and still compare results. Polytomous models — GRM and GPCM — do most of the work here, since response options are typically frequency or severity categories rather than right/wrong.</p>
+
+<p>Health measurement is also where <strong>local independence</strong> (Part 6) bites hardest: symptom items often overlap heavily in content (“trouble falling asleep”, “trouble staying asleep”), and treating a dependent pair as two independent items inflates reliability in exactly the direction that flatters the instrument.</p>
+
+<h2>Psychological and attitude measurement</h2>
+
+<p>Personality inventories, attitude scales and clinical screeners use IRT to do things classical methods cannot: identify items that discriminate poorly, detect items that function differently across cultures or languages, and build short forms that retain precision in the region of interest. For a depression screener, that region is the clinical threshold, not the population mean — and only a model-based approach lets you target it.</p>
+
+<h2>Computer adaptive testing</h2>
+
+<p>Adaptive testing is the application that made IRT indispensable, and it is worth seeing the loop:</p>
+
+<figure>
+<svg viewBox="0 0 700 200" role="img" aria-label="The adaptive testing loop: start from a provisional ability estimate, select the item with maximum information at that estimate subject to exposure and content constraints, administer it, update the estimate and its standard error, then either stop when the standard error is small enough or repeat.">
+  <defs>
+    <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <rect x="15" y="70" width="120" height="50" rx="4" fill="none" stroke="currentColor"/>
+  <text x="75" y="90" font-size="11" fill="currentColor" text-anchor="middle">provisional θ̂</text>
+  <text x="75" y="106" font-size="10" fill="currentColor" text-anchor="middle">starts at the mean</text>
+
+  <rect x="185" y="70" width="140" height="50" rx="4" fill="none" stroke="currentColor"/>
+  <text x="255" y="90" font-size="11" fill="currentColor" text-anchor="middle">select next item</text>
+  <text x="255" y="106" font-size="10" fill="currentColor" text-anchor="middle">max I(θ̂), constrained</text>
+
+  <rect x="375" y="70" width="130" height="50" rx="4" fill="none" stroke="currentColor"/>
+  <text x="440" y="90" font-size="11" fill="currentColor" text-anchor="middle">administer</text>
+  <text x="440" y="106" font-size="10" fill="currentColor" text-anchor="middle">record response</text>
+
+  <rect x="555" y="70" width="130" height="50" rx="4" fill="none" stroke="currentColor"/>
+  <text x="620" y="90" font-size="11" fill="currentColor" text-anchor="middle">update θ̂, SE</text>
+  <text x="620" y="106" font-size="10" fill="currentColor" text-anchor="middle">EAP or WLE</text>
+
+  <line x1="135" y1="95" x2="180" y2="95" stroke="currentColor" marker-end="url(#c1)"/>
+  <line x1="325" y1="95" x2="370" y2="95" stroke="currentColor" marker-end="url(#c1)"/>
+  <line x1="505" y1="95" x2="550" y2="95" stroke="currentColor" marker-end="url(#c1)"/>
+
+  <path d="M 620 120 C 620 165 400 175 255 175 C 200 175 185 150 185 125" fill="none" stroke="currentColor" marker-end="url(#c1)"/>
+  <text x="420" y="190" font-size="10" fill="currentColor" text-anchor="middle">repeat while SE(θ̂) &gt; target</text>
+
+  <path d="M 620 70 L 620 40" stroke="var(--accent)" marker-end="url(#c1)"/>
+  <text x="628" y="36" font-size="10" fill="var(--accent)">SE ≤ target → stop, report θ̂ ± SE</text>
+</svg>
+<figcaption>Every box in this loop requires a calibrated IRT model. Item selection needs the information function; the update needs a scoring method; the stopping rule needs a conditional standard error. Classical test theory can express none of the three, which is why adaptive testing had to wait for IRT.</figcaption>
+</figure>
+
+<p>The gain is efficiency: an adaptive test typically reaches the precision of a fixed test roughly half its length, because it does not waste items that are far too easy or too hard for the candidate. In production, two complications arise — <strong>exposure control</strong>, to stop the most informative items being shown to everyone and leaking, and <strong>content balancing</strong>, so the test remains a valid sample of the domain rather than whatever maximises information. Operational systems include the GRE, the GMAT, the military’s CAT-ASVAB and the Duolingo English Test.</p>
+
+<h2>Equating and linking</h2>
+
+<p>Placing two different tests on one scale is a direct consequence of IRT’s structure, and it is how “this year’s paper was harder” becomes a measurable claim rather than an argument. The standard design is <strong>common-item non-equivalent groups</strong>: two forms share a subset of anchor items, and the shared items’ parameters are used to find the linear transformation that puts both calibrations on one metric. Methods for finding that transformation include mean/mean, mean/sigma and the characteristic-curve approaches of Stocking and Lord; alternatively, both forms can be calibrated concurrently in a single run.</p>
+
+<h2>Sample size: what you actually need</h2>
+
+<p>The most common practical question. The figures below are working guidance from the literature and from this project’s documentation, not thresholds with sharp edges — and they interact with test length, because more items means more information about each respondent and thus better-determined parameters.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Model</th><th>Workable</th><th>Comfortable</th><th>Binding constraint</th></tr></thead>
+<tbody>
+<tr><td>Rasch / PCM</td><td>~200</td><td>500+</td><td>One parameter per item; the least demanding</td></tr>
+<tr><td>1PL</td><td>~200</td><td>500+</td><td>As above, plus one shared slope</td></tr>
+<tr><td>2PL</td><td>~500</td><td>1,000+</td><td>Discriminations need respondents spread across the scale</td></tr>
+<tr><td>GRM / GPCM</td><td>~500</td><td>1,000+</td><td>Every category needs enough responses; sparse top categories are the usual failure</td></tr>
+<tr><td>3PL</td><td>~1,000</td><td>2,000+</td><td><var>c</var> is weakly identified; detecting it via M2 may need ~4,000 (Part 6)</td></tr>
+<tr><td>DIF analysis</td><td>~200–300 <em>per group</em></td><td>500+ per group</td><td>The smaller group governs, not the total</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Two cautions. Small samples do not simply give wider standard errors — they give <em>non-convergence</em>, which IRTBoss treats as terminal (Part 4). And for DIF, a study with 5,000 respondents of whom 80 are in the focal group is an 80-person study for that purpose.</p>
+
+<h2>What IRTBoss is not built for</h2>
+
+<p>An honest tool states its scope. None of the following is a defect; each is a boundary, and knowing them saves you from misusing the output.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Not supported</th><th>What it means for you</th></tr></thead>
+<tbody>
+<tr><td><strong>Multidimensional IRT</strong></td><td>The tool is unidimensional by design. It <em>tests</em> that assumption (Part 6) rather than asserting it, but if your instrument is genuinely multidimensional you need dedicated software — <code>mirt</code> in R being the obvious choice.</td></tr>
+<tr><td><strong>Equating and linking</strong></td><td>There is no linking module. One dataset is analysed at a time, and two runs are on two different metrics. Do not compare raw difficulties across runs.</td></tr>
+<tr><td><strong>Adaptive test delivery</strong></td><td>IRTBoss calibrates; it does not administer. Its parameters could feed a CAT engine, but it is not one.</td></tr>
+<tr><td><strong>Item banking and authoring</strong></td><td>No item metadata, versioning or authoring workflow. It analyses a response matrix you already have.</td></tr>
+<tr><td><strong>Nominal and continuous responses</strong></td><td>Bock’s nominal response model (unordered options) is not implemented, nor are continuous-response models. Responses must be dichotomous or ordered-categorical.</td></tr>
+<tr><td><strong>Longitudinal and growth models</strong></td><td>No repeated-measures structure. Measuring growth requires linking, which is also absent.</td></tr>
+<tr><td><strong>Cognitive diagnosis models</strong></td><td>A different family entirely — discrete skill profiles rather than a continuous trait.</td></tr>
+<tr><td><strong>Consequence analysis</strong></td><td>Described in ARCHITECTURE §3.3 and not implemented; see Part 8. Do the cut-score sensitivity check by hand.</td></tr>
+<tr><td><strong>PDF or JSON report export</strong></td><td>Report output is self-contained HTML only.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Where IRTBoss fits well</h2>
+
+<p>Put positively, the tool is a good match when you have a single response matrix from a unidimensional instrument and you need a defensible analysis of it: item parameters with honest standard errors, precision reported as a curve rather than one number, fit and assumption checks that do not flatter the instrument, a DIF screen with the bias-versus-impact caveat attached, and a model comparison that tells you when the data cannot decide. It is built for the case where someone will later ask “how do you know?” — and the answer has to survive the question.</p>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>IRT underpins NAEP, PISA, TIMSS, licensure examinations, PROMIS health measures and every operational adaptive test.</li>
+  <li>Rotated booklet designs and decade-long trend reporting are possible because items and people share a scale and missing data is handled natively.</li>
+  <li>For high-stakes decisions the relevant precision is at the cut score, not averaged over the population.</li>
+  <li>Adaptive testing needs an information function, a scoring method and a conditional standard error — all three are IRT-only.</li>
+  <li>Sample size requirements rise with parameters per item: ~200 for Rasch, ~500 for 2PL, ~1,000+ for 3PL, and per-group for DIF.</li>
+  <li>IRTBoss is unidimensional, single-dataset, calibration-only: no MIRT, no equating, no CAT delivery, no item banking, no growth models.</li>
+</ul>
+
+<nav class="pager">
+  <a href="08-comparison.html"><span class="lbl">Previous</span>← Part 8 · Comparing models</a>
+  <a href="10-software.html"><span class="lbl">Next</span>Part 10 · The software →</a>
+</nav>
+
+</div>
+</body>
+</html>

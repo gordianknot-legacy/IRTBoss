@@ -1,30 +1,10 @@
-# API routes for IRTBoss
-"""
-FastAPI routes for the IRT assessment platform.
+"""HTTP layer: routers, schemas, and request dependencies.
 
-Provides endpoints for:
-- File upload and validation
-- Model fitting jobs
-- Results retrieval
-- Report generation
+Nothing in this package computes anything. It authenticates, validates, reads and
+writes owner-scoped rows, and enqueues work. Any CPU-bound call appearing here
+is the P5 event-loop defect returning.
 """
 
-from .routes import router
-from .schemas import (
-    ProjectCreate,
-    ProjectResponse,
-    UploadResponse,
-    FittingJobResponse,
-    ModelResultResponse,
-    ReportRequest,
-)
+from .router import api_router
 
-__all__ = [
-    "router",
-    "ProjectCreate",
-    "ProjectResponse",
-    "UploadResponse",
-    "FittingJobResponse",
-    "ModelResultResponse",
-    "ReportRequest",
-]
+__all__ = ["api_router"]

@@ -1,289 +1,163 @@
-"""
-Pydantic schemas for API request/response validation.
+"""Wire schemas (Pydantic v2).
 
-These schemas define the contract between the frontend and backend,
-ensuring type safety and validation at API boundaries.
+Response models are declared explicitly and never built from the ORM object by
+default, so a column added to :mod:`app.db.models` cannot start leaking through
+the API by accident — ``password_hash`` being the case that matters.
+
+Enums are real enums on the wire. ARCHITECTURE §5 makes the TypeScript client a
+generated artifact of this schema, and v1's bare ``str`` status fields are what
+made the frontend's narrower unions a fiction (P6).
+
+Optional fields are ``T | None`` with an explicit ``None`` default rather than
+omitted, so the generated client sees ``T | null`` — matching what FastAPI
+actually sends, which is the other half of the same P6 drift.
 """
 
+from __future__ import annotations
+
+import uuid
 from datetime import datetime
-from enum import Enum
-from typing import Optional
-from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-
-class StakesLevel(str, Enum):
-    """Stakes level for the assessment."""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+from app.auth.passwords import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
+from app.db.models import IntendedUse, RunStatus, StakesLevel
 
 
-class IntendedUse(str, Enum):
-    """Intended use of the assessment."""
-    RESEARCH = "research"
-    OPERATIONAL = "operational"
-    CERTIFICATION = "certification"
+class ORMModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
 
-class ResponseType(str, Enum):
-    """Type of response data."""
-    DICHOTOMOUS = "dichotomous"
-    POLYTOMOUS = "polytomous"
+# --- auth ----------------------------------------------------------------
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
 
 
-class JobStatus(str, Enum):
-    """Status of an async fitting job."""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
+class LoginRequest(BaseModel):
+    email: EmailStr
+    # No length validation on login: rejecting a short password here would
+    # report a policy that only applies at registration, and would let a caller
+    # distinguish "no such account" from "wrong shape of password".
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class ModelType(str, Enum):
-    """IRT model type."""
-    RASCH = "1PL"
-    TWO_PL = "2PL"
-    THREE_PL = "3PL"
+class UserOut(ORMModel):
+    id: uuid.UUID
+    email: str
+    created_at: datetime
 
 
-class ReportFormat(str, Enum):
-    """Output format for reports."""
-    PDF = "pdf"
-    HTML = "html"
-    JSON = "json"
+class SessionOut(BaseModel):
+    """The token is also set as an HttpOnly cookie; it is returned in the body
+    for non-browser clients, which cannot read the cookie jar."""
+
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserOut
 
 
-# --- Project Schemas ---
+# --- projects ------------------------------------------------------------
 
 class ProjectCreate(BaseModel):
-    """Request schema for creating a new project."""
-    name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=1000)
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
     stakes_level: StakesLevel = StakesLevel.MEDIUM
     intended_use: IntendedUse = IntendedUse.OPERATIONAL
 
 
-class ProjectResponse(BaseModel):
-    """Response schema for project details."""
-    id: UUID
+class ProjectUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
+    stakes_level: StakesLevel | None = None
+    intended_use: IntendedUse | None = None
+
+
+class ProjectOut(ORMModel):
+    id: uuid.UUID
     name: str
-    description: Optional[str]
+    description: str | None = None
     stakes_level: StakesLevel
     intended_use: IntendedUse
-    status: str  # "created", "data_uploaded", "fitting", "completed"
     created_at: datetime
     updated_at: datetime
 
 
-# --- Upload Schemas ---
+# --- datasets ------------------------------------------------------------
 
-class ValidationMessage(BaseModel):
-    """A single validation message."""
-    severity: str  # "info", "warning", "error"
-    code: str
-    message: str
-    details: Optional[str] = None
-    affected_items: Optional[list[str]] = None
-
-
-class DataSummary(BaseModel):
-    """Summary of uploaded data."""
-    n_respondents: int
+class DatasetOut(ORMModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    original_filename: str
+    checksum_sha256: str
+    size_bytes: int
+    n_persons: int
     n_items: int
-    response_type: ResponseType
-    n_categories: int
-    missing_percentage: float
-    item_names: list[str]
-
-
-class UploadResponse(BaseModel):
-    """Response after uploading data."""
-    is_valid: bool
-    summary: Optional[DataSummary]
-    messages: list[ValidationMessage]
-
-
-# --- Model Fitting Schemas ---
-
-class FittingJobCreate(BaseModel):
-    """Request to start model fitting."""
-    project_id: UUID
-    fit_1pl: bool = True
-    fit_2pl: bool = True
-    fit_3pl: bool = False  # Only when sample size permits
-
-
-class FittingJobResponse(BaseModel):
-    """Response for a fitting job."""
-    job_id: UUID
-    project_id: UUID
-    status: JobStatus
-    progress: float = Field(ge=0, le=1)  # 0 to 1
+    column_metadata: dict
     created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
 
 
-class FittingProgress(BaseModel):
-    """Progress update for model fitting."""
-    job_id: UUID
-    status: JobStatus
-    progress: float
-    current_model: Optional[str] = None
-    message: Optional[str] = None
+# --- analyses ------------------------------------------------------------
+
+class AnalysisCreate(BaseModel):
+    # Model keys are validated against app.irt.ModelKey in the route rather than
+    # here, so the error message can name the supported set without this module
+    # importing the engine.
+    models: list[str] = Field(min_length=1, max_length=7)
+    seed: int = Field(default=20260803, ge=0, le=2**31 - 1)
 
 
-# --- Model Results Schemas ---
+class AnalysisRunOut(ORMModel):
+    id: uuid.UUID
+    dataset_id: uuid.UUID
+    status: RunStatus
+    requested_models: list[str]
+    seed: int
+    engine_version: str
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    # Present only for failed runs, and a fixed operator-safe phrase — v1
+    # returned raw exception text to clients (P5).
+    failure_reason: str | None = None
+    notes: list[str] = Field(default_factory=list)
 
-class ItemParameter(BaseModel):
-    """Item parameters from fitted model."""
+
+class ItemParameterOut(ORMModel):
     item_id: str
+    position: int
+    n_categories: int
     discrimination: float
-    difficulty: float
-    guessing: float = 0.0
-    se_discrimination: Optional[float] = None
-    se_difficulty: Optional[float] = None
-    se_guessing: Optional[float] = None
+    difficulty: float | None = None
+    guessing: float | None = None
+    thresholds: list[float] = Field(default_factory=list)
+    se_discrimination: float | None = None
+    se_difficulty: float | None = None
+    se_guessing: float | None = None
+    se_thresholds: list[float] | None = None
 
 
-class FitStatistics(BaseModel):
-    """Model fit statistics."""
-    log_likelihood: float
-    aic: float
-    bic: float
-    n_parameters: int
+class ModelFitOut(ORMModel):
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
+
+    model_key: str
     converged: bool
+    log_likelihood: float | None = None
+    n_free_parameters: int | None = None
+    aic: float | None = None
+    bic: float | None = None
+    latent_sd: float | None = None
+    elapsed_seconds: float | None = None
+    failure_reason: str | None = None
+    notes: list[str] = Field(default_factory=list)
+    item_parameters: list[ItemParameterOut] = Field(default_factory=list)
 
 
-class FittedModelSummary(BaseModel):
-    """Summary of a fitted model."""
-    model_type: ModelType
-    fit_stats: FitStatistics
-    n_items: int
-    warnings: list[str] = []
-
-
-class ModelComparisonSummary(BaseModel):
-    """Summary of model comparison."""
-    models_fitted: list[ModelType]
-    recommended_model: ModelType
-    selection_reasons: list[str]
-    comparison_table: dict[str, dict[str, float]]
-
-
-class ModelResultResponse(BaseModel):
-    """Complete model fitting results."""
-    project_id: UUID
-    comparison: ModelComparisonSummary
-    selected_model: FittedModelSummary
-    item_parameters: list[ItemParameter]
-    reliability_estimate: float
-
-
-# --- Diagnostics Schemas ---
-
-class ICCDataPoint(BaseModel):
-    """Data point for ICC visualization."""
-    theta: float
-    probability: float
-    information: float
-
-
-class ICCResponse(BaseModel):
-    """ICC data for an item."""
-    item_id: str
-    data: list[ICCDataPoint]
-    difficulty: float
-    discrimination: float
-
-
-class TIFDataPoint(BaseModel):
-    """Data point for TIF visualization."""
-    theta: float
-    information: float
-    standard_error: float
-
-
-class TIFResponse(BaseModel):
-    """Test Information Function data."""
-    data: list[TIFDataPoint]
-    peak_theta: float
-    peak_information: float
-    coverage_low: float
-    coverage_high: float
-
-
-class ItemDiagnosticSummary(BaseModel):
-    """Summary diagnostics for an item."""
-    item_id: str
-    status: str  # "good", "acceptable", "flagged", "problematic"
-    discrimination: float
-    difficulty: float
-    guessing: float
-    max_information: float
-    flags: list[str]
-
-
-class DiagnosticsResponse(BaseModel):
-    """Complete diagnostics response."""
-    project_id: UUID
-    tif: TIFResponse
-    items: list[ItemDiagnosticSummary]
-    reliability: float
-    n_flagged: int
-
-
-# --- Recommendations Schemas ---
-
-class RecommendationItem(BaseModel):
-    """A single recommendation."""
-    priority: str  # "critical", "high", "medium", "low"
-    category: str
-    title: str
-    description: str
-    action: str
-    affected_items: list[str] = []
-
-
-class RecommendationsResponse(BaseModel):
-    """Complete recommendations response."""
-    project_id: UUID
-    overall_assessment: str
-    is_ready_for_use: bool
-    reliability: Optional[float]
-    recommendations: list[RecommendationItem]
-
-
-# --- Report Schemas ---
-
-class ReportRequest(BaseModel):
-    """Request to generate a report."""
-    project_id: UUID
-    format: ReportFormat
-    include_technical_appendix: bool = True
-    include_item_details: bool = True
-
-
-class ReportResponse(BaseModel):
-    """Response with generated report."""
-    project_id: UUID
-    format: ReportFormat
-    download_url: str
-    generated_at: datetime
-    expires_at: datetime
-
-
-# --- Reproducibility Schemas ---
-
-class ReproducibilityMetadata(BaseModel):
-    """Metadata for reproducibility."""
-    project_id: UUID
-    software_version: str
-    model_type: str
-    fitting_timestamp: datetime
-    data_hash: str  # Hash of input data
-    random_seed: Optional[int]
-    convergence_settings: dict
+class AnalysisResultOut(BaseModel):
+    run: AnalysisRunOut
+    fits: list[ModelFitOut]
+    # None until the run succeeds. An empty dict would read as "diagnostics were
+    # computed and found nothing", which is a different claim.
+    diagnostics: dict | None = None

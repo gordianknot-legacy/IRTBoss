@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IRTBoss Explainers — from no knowledge to working expertise</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker">IRTBoss documentation</p>
+  <h1>Explainers</h1>
+  <p class="lede">A complete path from “I have a spreadsheet of test answers” to “I can defend every number this tool produces, and I can maintain the code that produces it.” Thirteen parts, read in order or by track.</p>
+</header>
+
+<p>IRTBoss is a platform for <strong>item response theory</strong> — a family of statistical models that estimate how difficult each question on a test is and how much ability each person has, from nothing but the pattern of right and wrong answers. It is the machinery behind national school assessments, medical licensing exams, patient symptom questionnaires and adaptive tests that get harder when you do well.</p>
+
+<p>This series assumes no statistics beyond arithmetic to begin with, and ends with the full derivation of the estimation algorithm the tool implements. Every mathematical step is shown; every step is also explained in words first, so you can read the prose straight through and come back for the algebra.</p>
+
+<h2>How to read this</h2>
+
+<p>Three audiences, three routes through the same material. The badges at the top of each part tell you who it is written for.</p>
+
+<ul class="tracks">
+  <li class="track track-stake">Stakeholder</li>
+  <li class="track track-user">Analyst</li>
+  <li class="track track-maint">Maintainer</li>
+</ul>
+
+<div class="scroll">
+<table>
+<thead><tr><th>If you are…</th><th>Read</th><th>Roughly</th></tr></thead>
+<tbody>
+<tr><td>A funder, manager or partner who needs to know what this does and why it is trustworthy</td><td>Parts 1, 2, 9, and the first half of 8</td><td>40 minutes</td></tr>
+<tr><td>An analyst or measurement specialist who will run analyses and defend the results</td><td>Parts 1 through 9, then 11</td><td>A focused day</td></tr>
+<tr><td>An engineer who will maintain or extend the code</td><td>Parts 3, 4, then 10 and 11, then back to 5–8 as needed</td><td>A focused day</td></tr>
+<tr><td>Learning IRT properly, for its own sake</td><td>All of it, in order</td><td>Two or three sittings</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>The parts</h2>
+
+<ol class="toc">
+  <li>
+    <span class="n">Part 1 · Stakeholder · Analyst</span>
+    <a href="01-what-and-why.html">Why measuring people is harder than counting answers</a>
+    <p>What goes wrong when you add up correct answers, why a number needs a scale before it means anything, and the one design decision that shapes everything else in this tool: it refuses to name a best model.</p>
+  </li>
+  <li>
+    <span class="n">Part 2 · Stakeholder · Analyst</span>
+    <a href="02-history.html">A history of item response theory, 1904–today</a>
+    <p>From Spearman and Thurstone through Lord’s normal ogive, Birnbaum’s logistic, Rasch’s separability, Samejima’s graded responses and Bock &amp; Aitkin’s EM algorithm, to the software era. Includes the Rasch-versus-IRT schism, which you will meet in the wild.</p>
+  </li>
+  <li>
+    <span class="n">Part 3 · Analyst · Maintainer</span>
+    <a href="03-models.html">The models: seven ways to turn a response into a probability</a>
+    <p>Logits, latent traits and item characteristic curves. Rasch, 1PL, 2PL and 3PL for right/wrong items; GRM, PCM and GPCM for partial credit and rating scales. Full formulae, and what every parameter means in plain language.</p>
+  </li>
+  <li>
+    <span class="n">Part 4 · Analyst · Maintainer</span>
+    <a href="04-estimation.html">How the numbers are actually found</a>
+    <p>The heart of the series. Why you cannot simply maximise the obvious likelihood, what marginalisation fixes, and a complete derivation of the Bock–Aitkin EM algorithm over a quadrature grid — the exact method in <code>backend/app/irt/em.py</code>. Then standard errors, the delta method, priors, missing data, and why non-convergence is treated as fatal.</p>
+  </li>
+  <li>
+    <span class="n">Part 5 · Analyst</span>
+    <a href="05-scoring-precision.html">Scoring people, and how precisely</a>
+    <p>Three ways to place a person on the scale — EAP, MAP and WLE — and what each trades away. Then Fisher information, the conditional standard error curve, and reliability done properly, including why this tool will not report Cronbach’s alpha.</p>
+  </li>
+  <li>
+    <span class="n">Part 6 · Analyst</span>
+    <a href="06-fit-assumptions.html">Does the model actually describe the data?</a>
+    <p>Item fit by S-X² and the Lord–Wingersky recursion, infit and outfit, RMSD. Global fit by M2 and RMSEA2. Then the assumptions underneath everything: unidimensionality by parallel analysis and bifactor indices, and local independence by Q3*.</p>
+  </li>
+  <li>
+    <span class="n">Part 7 · Analyst</span>
+    <a href="07-dif.html">Differential item functioning: when an item is unfair</a>
+    <p>Mantel–Haenszel with the ETS A/B/C classification, logistic-regression DIF, and IRT likelihood-ratio DIF with anchor purification. Multiple comparisons. And the distinction that matters most: impact is not bias, and no statistic can tell you which you have found.</p>
+  </li>
+  <li>
+    <span class="n">Part 8 · Stakeholder · Analyst</span>
+    <a href="08-comparison.html">Comparing models without declaring a winner</a>
+    <p>Held-out predictive likelihood by k-fold cross-validation, AIC and BIC, the nested likelihood-ratio ladder, and the disagreement matrix. Why the tool ships a dossier instead of a recommendation, and the four reasons that reversed an earlier decision to do the opposite.</p>
+  </li>
+  <li>
+    <span class="n">Part 9 · Stakeholder · Analyst</span>
+    <a href="09-applications.html">Where this is used, and where it should not be</a>
+    <p>School assessment, licensure, health outcomes, psychological scales, adaptive testing and test equating — with the sample sizes each needs. Then an honest account of what IRTBoss is not built for.</p>
+  </li>
+  <li>
+    <span class="n">Part 10 · Maintainer</span>
+    <a href="10-software.html">The software: every moving part</a>
+    <p>The full journey of one request, from a browser upload to a rendered report. FastAPI, PostgreSQL, Redis, RQ, object storage, Argon2 sessions, React. Why estimation never runs in the web process, why the database stores a storage reference instead of a path, and how the tests are tiered.</p>
+  </li>
+  <li>
+    <span class="n">Part 11 · Analyst · Maintainer</span>
+    <a href="11-worked-example.html">A real analysis, read line by line</a>
+    <p>An actual run of 400 respondents and 12 items through 2PL and Rasch, with the real output: parameters, standard errors, comparison verdict, fit statistics, DIF screen. What each number is, and what it would take to change the conclusion.</p>
+  </li>
+  <li>
+    <span class="n">Part 12 · Everyone</span>
+    <a href="12-glossary-references.html">Glossary and references</a>
+    <p>Every term used in the series, defined in one line. Then the primary literature, organised by what it settles.</p>
+  </li>
+</ol>
+
+<h2>Where these sit relative to the other docs</h2>
+
+<p>These explainers teach. The existing documents are shorter and do different jobs, and none of them is superseded here:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Document</th><th>Job</th></tr></thead>
+<tbody>
+<tr><td><a href="../getting-started.md">getting-started.md</a></td><td>Commands to run the stack and your first analysis. Practical, no theory.</td></tr>
+<tr><td><a href="../data-schema.md">data-schema.md</a></td><td>Exactly what a valid CSV looks like and what validation refuses.</td></tr>
+<tr><td><a href="../irt-basics.md">irt-basics.md</a></td><td>A two-page orientation to IRT. Part 3 here is the long version.</td></tr>
+<tr><td><a href="../modeling-decisions.md">modeling-decisions.md</a></td><td>The statistical decisions, stated as decisions with reasons. Terse where these explainers are patient.</td></tr>
+<tr><td><a href="../v2/ARCHITECTURE.md">v2/ARCHITECTURE.md</a></td><td>The target design. Part 10 here explains the same system to someone new to it.</td></tr>
+<tr><td><a href="../v2/PROBLEMS.md">v2/PROBLEMS.md</a></td><td>The audit of the previous version, with file-and-line evidence. Useful background for Part 8.</td></tr>
+<tr><td><a href="../../PROGRESS.md">PROGRESS.md</a></td><td>What is finished, and an unusually frank list of what is not.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box box-warn">
+<h4>Two honest caveats about this series</h4>
+<p><strong>Citations should be verified before you rely on them externally.</strong> Authors, years, titles and venues in Part 12 are given as accurately as I can state them; volume and page numbers are deliberately omitted where I am not certain, rather than guessed at. Check any reference you intend to cite in your own work.</p>
+<p><strong>These are HTML files, not a website.</strong> GitHub shows HTML source rather than rendering it, so read these from disk — open <code>docs/explainers/index.html</code> in a browser — or serve the directory over GitHub Pages if you want links to work online.</p>
+</div>
+
+<nav class="pager">
+  <span></span>
+  <a href="01-what-and-why.html"><span class="lbl">Start with</span>Part 1 · Why measuring people is hard →</a>
+</nav>
+
+</div>
+</body>
+</html>

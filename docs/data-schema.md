@@ -1,24 +1,28 @@
 # Data Schema
 
-This document describes the required format for response data in IRTBoss.
+What IRTBoss accepts, what it refuses, and why it refuses rather than repairs.
 
 ## Overview
 
-IRTBoss accepts response data in CSV format with a specific structure:
-- **Rows** represent respondents (test-takers)
-- **Columns** represent items (questions)
-- **Values** represent responses
+Response data is a CSV:
 
-## File Format
+- **Rows** are respondents
+- **Columns** are items, plus any respondent-identifier or grouping columns you declare
+- **Values** are integer response codes
 
-### Requirements
+Ingest and validation are separate steps, deliberately. Ingest records what values it saw in each column but does not act on them, because deciding that `{0, 1, 2}` means three ordered categories is a measurement judgement rather than a parsing one. That judgement is made once, in validation, and every decision it makes is recorded as a note that reaches the report.
 
-- **Format**: CSV (Comma-Separated Values)
+## File format
+
+- **Format**: CSV, parsed with pandas defaults
 - **Encoding**: UTF-8
-- **Headers**: First row must contain item identifiers
-- **Size**: No explicit limit, but files over 100MB may be slow
+- **Headers**: the first row holds column names, which become item identifiers
+- **Size cap**: 25 MiB by default. The body is streamed and rejected the moment it exceeds the cap — before parsing, before it is written to disk.
+- **Shape caps**: 100,000 rows and 1,000 columns by default, applied after parsing so a small file cannot expand into a 100,000-column frame
 
-### Example: Dichotomous Data
+The caps are settings (`IRTBOSS_MAX_UPLOAD_BYTES`, `IRTBOSS_MAX_ROWS`, `IRTBOSS_MAX_COLUMNS`) rather than constants buried in a route.
+
+### Example: dichotomous data
 
 ```csv
 item_1,item_2,item_3,item_4,item_5
@@ -26,156 +30,116 @@ item_1,item_2,item_3,item_4,item_5
 0,0,1,0,1
 1,1,1,1,1
 0,1,0,1,0
-1,1,0,0,1
 ```
 
-### Example: Polytomous Data
+### Example: polytomous data with an ID and a grouping column
 
 ```csv
-q1,q2,q3,q4,q5
-4,3,2,4,3
-2,2,1,3,2
-5,4,4,5,4
-1,2,3,2,1
-3,3,3,3,3
+respondent,gender,q1,q2,q3,q4,q5
+S001,F,4,3,2,4,3
+S002,M,2,2,1,3,2
+S003,F,5,4,4,5,4
 ```
 
-## Response Values
+Uploaded with `id_column = "respondent"` and `group_columns = ["gender"]`, leaving `q1`–`q5` as the items.
 
-### Dichotomous (Binary) Responses
+## Column roles
 
-For correct/incorrect or agree/disagree:
-- `0` = incorrect / disagree / no
-- `1` = correct / agree / yes
+Roles are **declared at upload, never inferred**:
 
-Other binary codings (e.g., 1/2) will be automatically recoded to 0/1.
+| Parameter | Meaning |
+|---|---|
+| `id_column` | An optional respondent identifier. Excluded from the item set. |
+| `group_columns` | Optional grouping variables, as a JSON array of column names. Excluded from the item set and available to the DIF screen. |
+| *(everything else)* | Item columns |
 
-### Polytomous (Ordinal) Responses
+A declared column that is not in the file is an error, as is a file with no item columns left after the exclusions. v1 inferred column roles and would happily fit a respondent-ID column as an item, producing a "result" for it.
 
-For Likert scales or partial credit:
-- Values should be consecutive integers starting from 0 or 1
-- Example 5-point scale: 1, 2, 3, 4, 5
-- Example 4-point scale: 0, 1, 2, 3
+You do not need to strip demographics or IDs before uploading. You need to name them.
 
-All items must use the same scale within a dataset.
+## Response values
 
-### Missing Data
+### Dichotomous
 
-Missing responses can be represented as:
-- Empty cells
-- `NA`
-- `NaN`
-- Blank strings
+`0` / `1` is the usual coding. Any two distinct integer values work: categories are mapped by **value**, in numeric order, so `1`/`2` becomes `0`/`1` with the ordering preserved.
 
-Missing data is handled using maximum likelihood estimation (not listwise deletion).
+### Polytomous
 
-## Item Identifiers
+Consecutive integers, in either a 0-based or 1-based scheme — a 5-point scale as `1..5` or a 4-point one as `0..3`. Values map to 0-based category codes in numeric order.
 
-Column headers serve as item identifiers:
-- Must be unique
-- Should be descriptive but concise
-- Avoid special characters except underscores
-- Examples: `item_1`, `q15`, `reading_comp_3`
+Items do **not** have to share a scale within a dataset; the category count is recorded per item.
 
-## Data Quality Requirements
+Ordering is by value rather than by order of appearance, and this matters more than it looks. Every polytomous model here treats categories as ordered, so mapping them in the order they happened to appear in the file would silently permute the scale and produce thresholds describing nothing.
 
-### Minimum Sample Size
+### Missing data
 
-| Model | Minimum | Recommended |
-|-------|---------|-------------|
-| 1PL   | 100     | 300+        |
-| 2PL   | 100     | 500+        |
-| 3PL   | 500     | 1000+       |
+Recognised as missing: empty cells and the tokens pandas treats as null (`NA`, `NaN`, `null`, and the rest of its default set).
 
-### Minimum Items
+Missing responses are handled by **full-information maximum likelihood**: each respondent contributes the items they answered, and nothing is imputed. There is no listwise deletion at estimation.
 
-- At least 5 items required
-- 10+ items recommended for reliable estimation
+The one exception is the DIF screen, which needs a comparable matching score for every respondent, so incomplete response vectors are excluded there. They are excluded from all three DIF methods rather than from some, so that every DIF statistic describes the same people, and the count is reported.
 
-### Missing Data Limits
+## Item identifiers
 
-| Level        | Threshold | Consequence        |
-|--------------|-----------|-------------------|
-| Per item     | 20%       | Warning           |
-| Per person   | 30%       | Warning           |
-| Total        | 10%       | Error             |
+Column headers become item identifiers. They should be unique and descriptive: `item_01`, `q15`, `reading_comp_3`. They are rendered into the HTML report, which is autoescaped, so an unusual header is a legibility problem rather than a safety one.
 
-### Item Variance
+## What validation refuses
 
-- Items must have response variance
-- Items where everyone gives the same answer cannot be analyzed
+The governing rule is that data is never silently repaired. Each of the following removes a column with a stated reason that reaches the report, rather than coercing it into something fittable:
 
-## Validation Process
+| Condition | Outcome |
+|---|---|
+| Column is not numeric | **Rejected.** A non-numeric column has no defensible order, and alphabetical order is an arbitrary one — for an ordered model, wrong rather than merely untidy. Recode to integers before uploading. |
+| Values are not whole numbers | **Rejected.** A fractional score is not a category. |
+| Every observed response is identical | **Dropped.** The item cannot discriminate. |
+| Every response is missing | **Dropped.** |
+| More than 12 distinct values | **Dropped.** Far more likely a misidentified continuous measure — a raw score, an age, a timestamp — than a genuine rating scale. Refusing is safer than fitting a 40-category GRM that will not converge and will spend an hour not converging. |
+| Response codes are non-consecutive | **Renumbered**, with a note. A category nobody chose is not distinguishable from one that does not exist, so it is removed rather than estimated. |
+| Respondent answered no items at all | **Excluded**, with a count, so that a reported sample size means people who actually responded. |
 
-When you upload data, IRTBoss automatically:
+Validation raises only when nothing usable survives — no item columns, no respondents, or every column dropped. Everything salvageable is salvaged, and everything discarded to get there is listed.
 
-1. **Parses** the CSV file
-2. **Detects** the response type (dichotomous vs polytomous)
-3. **Counts** respondents and items
-4. **Calculates** missing data percentages
-5. **Checks** for zero-variance items
-6. **Identifies** extreme items (too easy/hard)
-7. **Validates** sample size for requested models
+Note what is *not* in that table: v1's automatic recoding of "other binary codings" and its advice to hand-recode text to numbers before upload remain the right advice, but the platform now tells you it refused rather than guessing on your behalf.
 
-You'll receive immediate feedback with:
-- Summary statistics
-- Warnings for potential issues
-- Errors for critical problems
+## Sample size
 
-## Common Issues
+There are no hardcoded minimum-sample gates on fitting. What exists instead:
 
-### Non-Numeric Values
+| Requirement | Where it applies |
+|---|---|
+| At least 3 items | Dimensionality assessment |
+| At least `2 × folds` respondents (10 at the default 5 folds) | Cross-validated model comparison |
+| At least 100 respondents per group | DIF; below it the statistics are `None` with the reason stated |
+| Roughly 60 items × 1,000 respondents, or 30 × 2,000 | Stable 3PL estimation. Reported as a caveat on the comparison, not a hard exclusion. |
 
-**Problem**: Cells contain text like "yes", "no", "N/A"
+These are floors for a statistic to be computable, not guidance on what sample you need. As a rule of thumb, a 2PL wants a few hundred respondents and the 3PL wants both a long test and a large sample; the standard errors on your parameters will tell you more about whether you had enough than any threshold table.
 
-**Solution**: Recode to numeric values before upload:
-- "yes" → 1
-- "no" → 0
-- "N/A" → leave empty for missing
+More items than respondents, or very sparse data, will usually show up as non-convergence — which is reported as non-convergence, with no parameters attached.
 
-### Inconsistent Coding
+## What ingest records
 
-**Problem**: Some items use 0/1, others use 1/2
+For every upload:
 
-**Solution**: Standardize all items to the same scale before upload.
+- SHA-256 checksum of the raw bytes
+- Size in bytes, and the parsed shape
+- The full column list, the item columns, the declared ID column and grouping columns
+- The distinct non-missing values observed in each item column (capped for storage)
 
-### Extra Columns
+The checksum, the engine version and the analysis seed are carried into the report, which is the reproducibility metadata v1 promised in three documents and delivered in none.
 
-**Problem**: File includes respondent IDs, demographics, or other non-response data
+## Sample files
 
-**Solution**: Remove all non-response columns. The file should only contain item responses.
+`examples/sample_datasets/` currently contains two files, carried over from v1:
 
-### Respondent Identifiers
+- `dichotomous_small.csv` — 190 respondents, 20 binary items
+- `polytomous_likert.csv` — 280 respondents, 15 items on a 5-point scale
 
-**Problem**: First column contains IDs like "student_001"
+The README in that directory still documents a third file, `dichotomous_medium.csv`, which does not exist, and states respondent counts that do not match the files. Neither dataset has been regenerated from `backend/app/irt/simulate.py`, so the parameters that produced them are not documented and the "right answer" for each is not a known quantity. Treat them as smoke-test material rather than as validation data.
 
-**Solution**: Remove the ID column. If you need to match results back to respondents, keep a separate mapping file.
+## Best practices
 
-## Best Practices
-
-1. **Clean your data** before upload:
-   - Remove non-response columns
-   - Handle missing data consistently
-   - Verify coding schemes
-
-2. **Use clear item names**:
-   - `math_01` instead of `1`
-   - `reading_comp` instead of `item`
-
-3. **Document your coding**:
-   - Keep a codebook separate from the data
-   - Record what each response value means
-
-4. **Preserve originals**:
-   - Keep your original data file unchanged
-   - Create a clean copy for IRTBoss
-
-## Sample Files
-
-Example datasets are available in the `examples/sample_datasets/` directory:
-
-- `dichotomous_small.csv`: 200 respondents, 20 items, binary
-- `dichotomous_medium.csv`: 500 respondents, 30 items, binary
-- `polytomous_likert.csv`: 300 respondents, 15 items, 5-point scale
-
-These can be used to explore the platform before using your own data.
+1. **Declare, do not delete.** Keep your ID and demographic columns in the file and name them at upload; you will want the grouping columns for the DIF screen.
+2. **Recode before uploading** if your responses are text. The platform will refuse them, correctly, but it cannot know that "Strongly agree" outranks "Agree".
+3. **Read the validation notes** on the run before reading anything else. They tell you which columns took no part in any statistic below.
+4. **Keep a codebook** separate from the data recording what each response value means. The platform preserves your ordering; it cannot preserve your meaning.
+5. **Keep the original file unchanged** and upload a clean copy. The checksum on the run refers to what you uploaded.

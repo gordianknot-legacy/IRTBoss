@@ -1,20 +1,29 @@
 # Python
+#
+# The directory names below are Python build artefacts, and several of them —
+# lib, build, dist, parts — are also ordinary names inside a source tree. Left
+# unanchored they match at any depth, which is how `lib/` silently excluded
+# `frontend/src/lib/` and shipped a frontend that could not compile. Anchored
+# with a leading slash they mean the repository root and nothing else; the
+# per-directory artefacts are listed explicitly.
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
+/build/
+/dist/
+/lib/
+/lib64/
+/parts/
+backend/build/
+backend/dist/
+backend/var/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
 sdist/
-var/
 wheels/
 *.egg-info/
 .installed.cfg
@@ -81,9 +90,16 @@ Thumbs.db
 dump.rdb
 
 # Uploads (user data)
+#
+# `*.csv` is deliberately broad — response data is the one thing that must never
+# reach a public repository by accident. The exceptions are the two sets of CSVs
+# that are source, not data: the example datasets, and the mirt agreement
+# fixtures, which have to be committed because regenerating them invalidates the
+# stored reference fits they are compared against.
 uploads/
 *.csv
 !examples/sample_datasets/*.csv
+!backend/tests/validation/fixtures/*.csv
 
 # R
 .Rhistory
@@ -95,3 +111,6 @@ uploads/
 *.temp
 .temp/
 tmp/
+
+# venv
+backend/.venv/

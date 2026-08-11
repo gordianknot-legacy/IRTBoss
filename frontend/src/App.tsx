@@ -1,24 +1,31 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import Dashboard from './pages/Dashboard'
-import Upload from './pages/Upload'
-import ModelComparison from './pages/ModelComparison'
-import Diagnostics from './pages/Diagnostics'
-import Export from './pages/Export'
-import Layout from './components/Layout'
+import { Navigate, Route, Routes } from 'react-router-dom'
 
-function App() {
+import { Layout } from '@/components/Layout'
+import { RequireAuth } from '@/components/RequireAuth'
+import { AuthPage } from '@/pages/AuthPage'
+import { ProjectsPage } from '@/pages/ProjectsPage'
+import { ProjectPage } from '@/pages/ProjectPage'
+import { DatasetPage } from '@/pages/DatasetPage'
+import { RunPage } from '@/pages/RunPage'
+
+export default function App() {
   return (
-    <Layout>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/projects/:projectId/upload" element={<Upload />} />
-        <Route path="/projects/:projectId/results" element={<ModelComparison />} />
-        <Route path="/projects/:projectId/diagnostics" element={<Diagnostics />} />
-        <Route path="/projects/:projectId/export" element={<Export />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+    <Routes>
+      <Route path="/sign-in" element={<AuthPage />} />
+      <Route
+        element={
+          <RequireAuth>
+            <Layout />
+          </RequireAuth>
+        }
+      >
+        <Route path="/" element={<Navigate to="/projects" replace />} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/:projectId" element={<ProjectPage />} />
+        <Route path="/datasets/:datasetId" element={<DatasetPage />} />
+        <Route path="/analyses/:runId" element={<RunPage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/projects" replace />} />
+    </Routes>
   )
 }
-
-export default App

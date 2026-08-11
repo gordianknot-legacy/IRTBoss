@@ -1,0 +1,73 @@
+# Fly.io deployment for the backend.
+#
+# Two processes from one image: the API and the RQ worker. They are separate
+# `processes` entries rather than separate apps so that a deploy moves both at
+# once — a worker running older estimation code than the API would produce
+# results the API cannot describe, and the engine version stamped on every run
+# would then be wrong.
+#
+# Secrets are NOT set here. `fly secrets set IRTBOSS_SECRET_KEY=...` and the
+# database and Redis URLs likewise; anything in this file is committed.
+#
+# Object storage is required, not optional: the application refuses to start in
+# production on the local backend, because the API and the worker are separate
+# processes and a shared directory only works while they are on one machine. Set
+# the bucket here if it is not sensitive, and the credentials as secrets:
+#
+#   fly secrets set AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
+#
+# Those two are read by botocore, not by this application, so they carry no
+# IRTBOSS_ prefix. Add IRTBOSS_S3_ENDPOINT_URL for a non-AWS bucket (R2, B2).
+
+app = "irtboss"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "docker/Dockerfile"
+
+[env]
+  IRTBOSS_ENVIRONMENT = "production"
+  IRTBOSS_STORAGE_BACKEND = "s3"
+  # Set to the real bucket before the first deploy. A missing bucket fails at
+  # start-up rather than at the first upload.
+  IRTBOSS_S3_BUCKET = ""
+  IRTBOSS_S3_REGION = "eu-west-2"
+
+[processes]
+  api = "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+  worker = "python -m app.workers.main"
+
+# Migrations run before the new version takes traffic. Without this the first
+# request after a schema change hits a database the code does not match.
+[deploy]
+  release_command = "alembic upgrade head"
+  strategy = "rolling"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  processes = ["api"]
+  # The API holds no session state — tokens are signed, not stored — so it is
+  # safe to stop idle machines. The worker is not auto-stopped: a queued job
+  # would sit undequeued until something else woke the machine.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/v1/health"
+
+# No volume. Uploaded CSVs go to the bucket configured above, and nothing else
+# here keeps state on disk — which is what makes the two processes independently
+# scalable. The volume this file used to declare was the one thing preventing
+# that; see docs/v2/DEPLOYMENT.md.
+
+[[vm]]
+  # Estimation is CPU-bound and holds the full response matrix plus a quadrature
+  # grid per model in memory. 1 GB is a starting point, not a measured figure.
+  size = "shared-cpu-2x"
+  memory = "1gb"

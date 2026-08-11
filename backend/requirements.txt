@@ -1,32 +1,55 @@
-# IRTBoss Backend Requirements
-# Python 3.10+
+# IRTBoss backend requirements — Python 3.12
+#
+# Lower bounds, stating what each dependency is here for. This file is the
+# *input* to the lock, not the thing anything deploys from: `requirements.lock`
+# holds the resolved, hash-pinned set and is what the image and CI install. Edit
+# this file, then regenerate the lock with the command in its header.
+#
+# `tests/test_lockfile.py` fails if the two disagree, so a bound raised here
+# without a recompile does not reach the default branch.
 
-# Web framework
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.6
+# --- web -----------------------------------------------------------------
+fastapi>=0.141.1
+uvicorn[standard]>=0.52.1
+python-multipart>=0.0.32          # multipart/form-data uploads
+itsdangerous>=2.2.0               # signed session tokens (see app/auth/tokens.py)
+jinja2>=3.1.6                     # report templates (see app/reports/)
 
-# Data handling
-pandas>=2.1.0
-numpy>=1.24.0
+# --- validation ----------------------------------------------------------
+pydantic>=2.13.4
+pydantic-settings>=2.14.2
+email-validator>=2.3.0            # required by pydantic's EmailStr
 
-# Validation
-pydantic>=2.5.0
+# --- auth ----------------------------------------------------------------
+argon2-cffi>=25.1.0
 
-# Task queue (choose one based on deployment)
-rq>=1.16.0
-redis>=5.0.0
+# --- persistence ---------------------------------------------------------
+sqlalchemy>=2.0.51
+alembic>=1.19.0
+asyncpg>=0.31.0                   # production driver
+greenlet>=3.5.4                   # required by SQLAlchemy's async bridge
 
-# For PDF report generation
-# weasyprint>=60.0
-# jinja2>=3.1.0
+# --- queue ---------------------------------------------------------------
+rq>=2.10.0
+redis>=8.1.0
 
-# Testing
-pytest>=7.4.0
-pytest-asyncio>=0.23.0
-httpx>=0.26.0
+# --- upload storage ------------------------------------------------------
+boto3>=1.43.67                    # S3-compatible object storage (app/storage/s3.py)
 
-# Development
-black>=24.0.0
-ruff>=0.1.0
-mypy>=1.8.0
+# --- numerics (app/irt, app/psychometrics) -------------------------------
+numpy>=2.5.1
+scipy>=1.18.0
+pandas>=3.0.5
+
+# --- development / test --------------------------------------------------
+pytest>=9.1.1
+pytest-asyncio>=1.4.0
+pytest-xdist>=3.8.0               # `-n auto` in CI; locked rather than installed
+                                  # alongside the lock, which --require-hashes
+                                  # would refuse
+httpx>=0.28.1                     # ASGI transport for API tests
+aiosqlite>=0.22.1                 # test database; JSONB degrades to JSON
+fakeredis>=2.37.0                 # queue assertions without a Redis server
+moto[s3]>=5.2.2                   # in-process S3; see app/storage/s3.py on what
+                                  # it does and does not verify
+ruff>=0.16.1

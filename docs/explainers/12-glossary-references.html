@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 12 · Glossary and references</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 12 of 12</p>
+  <h1>Glossary and references</h1>
+  <ul class="tracks">
+    <li class="track track-stake">Stakeholder</li>
+    <li class="track track-user">Analyst</li>
+    <li class="track track-maint">Maintainer</li>
+  </ul>
+  <p class="lede">Every term the series uses, defined in one line each, grouped the way the series introduced them. Then the primary literature, organised by what each work settles — so when someone asks “says who?”, you have the page to point at.</p>
+</header>
+
+<h2>The scale and the people</h2>
+
+<dl class="gloss">
+  <dt>Latent trait (θ, theta)</dt>
+  <dd>The unobserved quantity a test measures — ability, severity, attitude — placed on a continuous scale that the model estimates rather than observes. (Part 3)</dd>
+  <dt>Logit</dt>
+  <dd>The natural logarithm of the odds; the scale on which IRT models are linear and a difference of 1 means the same thing everywhere. (Part 3)</dd>
+  <dt>Scale indeterminacy</dt>
+  <dd>The fact that θ has no natural zero or unit, so a convention (mean 0, and either SD 1 or slopes 1) must be imposed before any number is interpretable. (Part 3)</dd>
+  <dt>Latent SD</dt>
+  <dd>The standard deviation of θ that a fit either fixes at 1 (2PL family) or estimates freely (Rasch, PCM); it travels with every fit because all downstream statistics are wrong on the other metric. (Parts 4, 11)</dd>
+  <dt>Classical test theory (CTT)</dt>
+  <dd>The pre-IRT framework built on total scores, in which every statistic — difficulty, reliability, the score itself — depends on which people and which items happened to meet. (Part 1)</dd>
+  <dt>Impact</dt>
+  <dd>A genuine group difference in the trait itself, which DIF methods deliberately condition away and which is not evidence of unfairness. (Part 7)</dd>
+</dl>
+
+<h2>Models and their parameters</h2>
+
+<dl class="gloss">
+  <dt>Item characteristic curve (ICC)</dt>
+  <dd>The S-shaped curve giving the probability of a correct (or higher-category) response at every θ; every dichotomous model is a family of these. (Part 3)</dd>
+  <dt>Difficulty (b)</dt>
+  <dd>The point on the θ scale where an item does its work — for a 2PL, where the probability of success is one half. (Part 3)</dd>
+  <dt>Discrimination (a)</dt>
+  <dd>The slope of the ICC at its steepest: how sharply the item separates people just below from people just above its difficulty. (Part 3)</dd>
+  <dt>Guessing parameter (c)</dt>
+  <dd>The 3PL's lower asymptote — the probability that a person far below the item's difficulty still succeeds; weakly identified and expensive in data. (Part 3)</dd>
+  <dt>Rasch model</dt>
+  <dd>The one-parameter model in which all discriminations are equal by philosophical commitment, buying specific objectivity at the price of flexibility. (Part 3)</dd>
+  <dt>Specific objectivity</dt>
+  <dd>Rasch's property that comparisons between people do not depend on which items were used, and vice versa — the core of the Rasch-versus-IRT schism. (Part 2)</dd>
+  <dt>1PL</dt>
+  <dd>A model with one shared, estimated discrimination and unit latent SD — a statistical compromise, distinct from the Rasch model despite the similar shape. (Part 3)</dd>
+  <dt>2PL / 3PL</dt>
+  <dd>Two- and three-parameter logistic models: per-item difficulty and discrimination, plus (3PL) a guessing floor. (Part 3)</dd>
+  <dt>Graded response model (GRM)</dt>
+  <dd>Samejima's polytomous model, built from cumulative boundary curves: the probability of reaching <em>at least</em> category k. (Part 3)</dd>
+  <dt>Partial credit model (PCM) / Generalised PCM (GPCM)</dt>
+  <dd>Polytomous models built from adjacent-category steps — PCM with equal slopes in the Rasch tradition, GPCM with a slope per item. (Part 3)</dd>
+  <dt>Threshold / step parameter</dt>
+  <dd>A polytomous item's category boundary: in the GRM the location of a cumulative curve, in the PCM/GPCM the point where two adjacent categories are equally likely. (Part 3)</dd>
+  <dt>Item information</dt>
+  <dd>A curve saying how much an item reduces uncertainty at each θ — high near its difficulty, higher with steeper discrimination, and additive across items. (Parts 3, 5)</dd>
+</dl>
+
+<h2>Estimation</h2>
+
+<dl class="gloss">
+  <dt>Likelihood</dt>
+  <dd>The probability of the observed responses viewed as a function of the parameters; estimation is the search for the parameters that maximise it. (Part 4)</dd>
+  <dt>Joint maximum likelihood (JML)</dt>
+  <dd>The tempting approach that estimates every person and every item at once — and is inconsistent, because the number of person parameters grows with the sample. (Part 4)</dd>
+  <dt>Marginal maximum likelihood (MML)</dt>
+  <dd>The approach this tool uses: integrate the person parameters out against a population distribution, leaving a likelihood in item parameters alone. (Part 4)</dd>
+  <dt>Quadrature</dt>
+  <dd>Replacing the integral over θ with a weighted sum over a grid of points — the numerical trick that makes marginalisation computable. (Part 4)</dd>
+  <dt>EM algorithm</dt>
+  <dd>The iteration that alternates between asking “where is each respondent, probably?” (E-step) and refitting each item to those expected locations (M-step). (Part 4)</dd>
+  <dt>Bock–Aitkin</dt>
+  <dd>The 1981 formulation of EM for IRT — expected counts on a quadrature grid, items fitted independently in the M-step — implemented in <code>backend/app/irt/em.py</code>. (Parts 2, 4)</dd>
+  <dt>Expected counts</dt>
+  <dd>The E-step's output: for each item and grid point, the expected number of respondents there and the expected number answering in each category. (Part 4)</dd>
+  <dt>Convergence</dt>
+  <dd>The state where another EM cycle no longer changes the answer; its absence means there are no estimates, and this tool treats that as fatal rather than reporting the last iterate. (Parts 1, 4)</dd>
+  <dt>Full-information maximum likelihood (missing data)</dt>
+  <dd>The missing-response rule: each person contributes the items they answered and nothing is imputed. (Part 4)</dd>
+  <dt>Standard error (SE)</dt>
+  <dd>The uncertainty attached to an estimate — from the observed information matrix here — without which a parameter is a number pretending to be more than it is. (Part 4)</dd>
+  <dt>Delta method</dt>
+  <dd>The rule for carrying standard errors through a transformation, used to move SEs from the internal parameterisation back to interpretable units. (Part 4)</dd>
+  <dt>Parameter recovery</dt>
+  <dd>The only real test of an estimator: simulate data from known parameters and check they come back — automated in the test suite and demonstrated in Part 11. (Parts 4, 10, 11)</dd>
+</dl>
+
+<h2>Scoring and precision</h2>
+
+<dl class="gloss">
+  <dt>EAP (expected a posteriori)</dt>
+  <dd>The posterior mean of θ given a person's responses — always defined, even for perfect scores, at the price of shrinkage towards the prior mean. (Part 5)</dd>
+  <dt>MAP (maximum a posteriori)</dt>
+  <dd>The posterior mode — the single most probable θ, slightly cheaper and slightly more shrunk than EAP. (Part 5)</dd>
+  <dt>WLE (weighted likelihood estimate)</dt>
+  <dd>Warm's correction to maximum likelihood scoring that removes most of its bias without borrowing a prior. (Part 5)</dd>
+  <dt>Shrinkage</dt>
+  <dd>The pull of Bayesian score estimates towards the prior mean, strongest where the test measures worst — honesty about uncertainty, not an error. (Parts 5, 11)</dd>
+  <dt>Test information / conditional standard error</dt>
+  <dd>The sum of item informations at each θ, and its reciprocal square root: precision as a curve over the scale, not a single number. (Part 5)</dd>
+  <dt>Marginal reliability</dt>
+  <dd>An average of the conditional precision over the population — one summary number, reported in two versions because “error” can include or exclude the prior. (Part 5)</dd>
+  <dt>Empirical reliability</dt>
+  <dd>The reliability computed from the actual score distribution of the analysed sample rather than from the model alone. (Part 5)</dd>
+  <dt>McDonald's ω</dt>
+  <dd>A model-based reliability for the summed score, reported for comparability with classical results. (Part 5)</dd>
+  <dt>Cronbach's α</dt>
+  <dd>The classical reliability coefficient this tool deliberately does not report, because ω answers the same question with fewer false assumptions. (Part 5)</dd>
+</dl>
+
+<h2>Fit and assumptions</h2>
+
+<dl class="gloss">
+  <dt>Item fit</dt>
+  <dd>The family of checks asking whether one item's observed behaviour matches its fitted curve. (Part 6)</dd>
+  <dt>S-X²</dt>
+  <dd>Orlando and Thissen's item-fit statistic, comparing observed and expected performance within summed-score groups via the Lord–Wingersky recursion. (Part 6)</dd>
+  <dt>Lord–Wingersky recursion</dt>
+  <dd>The algorithm that builds the distribution of the summed score from item curves, one item at a time. (Part 6)</dd>
+  <dt>Infit / outfit</dt>
+  <dd>The Rasch tradition's mean-square residual statistics — outfit outlier-sensitive, infit information-weighted — with 1.0 meaning “as expected”. (Part 6)</dd>
+  <dt>RMSD</dt>
+  <dd>An effect-size item statistic: how far the observed curve sits from the fitted one, answering “how wrong”, not “how confident”. (Part 6)</dd>
+  <dt>M2</dt>
+  <dd>Maydeu-Olivares and Joe's global fit statistic computed from one- and two-way margins only, usable where the full contingency table is unthinkably sparse. (Part 6)</dd>
+  <dt>RMSEA2 / SRMSR</dt>
+  <dd>Effect sizes accompanying M2 — misfit per degree of freedom, and the typical size of residual correlations — reported without fixed cutoffs. (Part 6)</dd>
+  <dt>Unidimensionality</dt>
+  <dd>The assumption that one latent variable drives all items — tested, not asserted, via parallel analysis, Velicer's MAP and bifactor indices. (Part 6)</dd>
+  <dt>Polychoric correlation</dt>
+  <dd>The correlation between the continuous variables assumed to underlie two categorical responses; the right matrix to factor, and unstable when cells are nearly empty. (Parts 6, 11)</dd>
+  <dt>Parallel analysis</dt>
+  <dd>Horn's procedure: retain a component only if its eigenvalue beats what random data of the same shape produces. (Part 6)</dd>
+  <dt>Velicer's MAP test</dt>
+  <dd>A component-count method that stops where the average partial correlation is smallest. (Part 6)</dd>
+  <dt>Bifactor indices (ECV, PUC)</dt>
+  <dd>Measures of whether a general factor dominates enough for a unidimensional model to be honest even when strict unidimensionality fails. (Part 6)</dd>
+  <dt>Local independence</dt>
+  <dd>The assumption that, given θ, items are independent — violated by shared stimuli, chained steps, and duplicated content. (Part 6)</dd>
+  <dt>Q3 / Q3*</dt>
+  <dd>Yen's residual correlation between item pairs, and its bias-corrected version, judged against a bootstrap critical value rather than the conventional 0.2. (Part 6)</dd>
+  <dt>Testlet</dt>
+  <dd>A cluster of items sharing a stimulus — expected to be locally dependent, which is a modelling decision, not automatically a defect. (Part 6)</dd>
+</dl>
+
+<h2>Fairness</h2>
+
+<dl class="gloss">
+  <dt>Differential item functioning (DIF)</dt>
+  <dd>An item behaving differently for two groups <em>at the same trait level</em> — the statistical premise of a fairness review, and not yet a finding of bias. (Part 7)</dd>
+  <dt>Uniform / non-uniform DIF</dt>
+  <dd>A constant advantage for one group across the scale, versus an advantage that changes direction or size with θ (the curves cross). (Part 7)</dd>
+  <dt>Mantel–Haenszel</dt>
+  <dd>The stratified odds-ratio DIF test, reported with the ETS delta metric and the A/B/C severity classification. (Part 7)</dd>
+  <dt>ETS A/B/C classification</dt>
+  <dd>The operational severity grades for MH DIF: negligible, slight-to-moderate, moderate-to-large — defined on effect size plus raw significance. (Part 7)</dd>
+  <dt>Logistic regression DIF</dt>
+  <dd>Nested logistic models on matching score, group and their interaction, with the ΔR² effect size governing the flag rather than the p-value. (Part 7)</dd>
+  <dt>IRT likelihood-ratio DIF</dt>
+  <dd>Comparing models in which one item's parameters are freed versus constrained across groups, anchored by items believed DIF-free. (Part 7)</dd>
+  <dt>Anchor / purification</dt>
+  <dd>The DIF-free item set that defines the common scale, and the iterative removal of contaminated anchors — because testing an item for DIF presumes the rest are clean. (Part 7)</dd>
+  <dt>Benjamini–Hochberg (BH)</dt>
+  <dd>The false-discovery-rate adjustment applied across items, reported beside raw p-values so a dozen tests cannot manufacture a finding. (Parts 7, 11)</dd>
+  <dt>Bias</dt>
+  <dd>The judgement that a DIF'd item is unfair — a conclusion about content and construct that requires reading the item, which no statistic in the report can do. (Part 7)</dd>
+</dl>
+
+<h2>Comparing models</h2>
+
+<dl class="gloss">
+  <dt>Comparison dossier</dt>
+  <dd>The tool's output for model choice: ranked candidates, every criterion shown, disagreements displayed, and no <code>best_model</code> field — deliberately. (Part 8)</dd>
+  <dt>Held-out predictive log-likelihood</dt>
+  <dd>The primary criterion: how well parameters fitted on some respondents predict the responses of respondents they never saw, via k-fold cross-validation. (Part 8)</dd>
+  <dt>k-fold cross-validation</dt>
+  <dd>Splitting respondents into k groups, fitting on k−1 and scoring the held-out group, so every respondent is predicted exactly once by a model that never saw them. (Part 8)</dd>
+  <dt>AIC / BIC</dt>
+  <dd>Information criteria trading fit against parameter count with different exchange rates; reported as secondary evidence, with BIC's documented tilt against the 3PL. (Part 8)</dd>
+  <dt>Likelihood-ratio test (LRT)</dt>
+  <dd>The test for nested models — valid for Rasch-versus-2PL, invalid for 2PL-versus-3PL because c = 0 sits on a boundary of the parameter space. (Part 8)</dd>
+  <dt>Boundary problem</dt>
+  <dd>The reason the 2PL-versus-3PL LRT fails: a null hypothesis on the edge of the parameter space breaks the χ² approximation the test depends on. (Part 8)</dd>
+  <dt>Disagreement matrix</dt>
+  <dd>The dossier's explicit list of criterion pairs that name different models first — shown rather than resolved, because disagreement is information. (Part 8)</dd>
+  <dt>Indistinguishability verdict</dt>
+  <dd>The dossier's statement that the leading models differ by less than the noise in the comparison, so the choice must be made on grounds outside the data. (Parts 8, 11)</dd>
+  <dt>Reference model</dt>
+  <dd>The single parameterisation item-level diagnostics are computed against — a designated vantage point with a recorded rationale, not a winner. (Parts 8, 11)</dd>
+  <dt>Vuong test</dt>
+  <dd>A test for non-nested comparisons, deliberately not implemented; its misuse for nested IRT models is a documented trap. (Part 8)</dd>
+</dl>
+
+<h2>Software terms</h2>
+
+<dl class="gloss">
+  <dt>Orchestrator</dt>
+  <dd><code>run_analysis()</code> — the one function between the queue and the statistics, which fits every requested model and attempts every diagnostic independently. (Part 10)</dd>
+  <dt>Worker</dt>
+  <dd>The separate process that executes analyses dequeued from Redis, so estimation never blocks the web process. (Part 10)</dd>
+  <dt>Job queue (RQ)</dt>
+  <dd>The Redis-backed queue through which the API hands work to the worker, with job state the browser can poll. (Part 10)</dd>
+  <dt>Object storage</dt>
+  <dd>Where uploaded files and rendered reports live — referenced from the database by storage key, never by filesystem path. (Part 10)</dd>
+  <dt>Tier 1 / Tier 2 tests</dt>
+  <dd>The split between tests that run anywhere (statistics against fixtures) and tests needing live infrastructure (a real queue worker end-to-end). (Part 10)</dd>
+  <dt>mirt validation harness</dt>
+  <dd>The CI job that fits the same data in R's <code>mirt</code> and asserts this engine's parameters match within tolerance — R as witness, not as dependency. (Parts 4, 10)</dd>
+  <dt>Seed</dt>
+  <dd>The recorded random-number starting point that makes a run reproducible, stored in every result. (Parts 10, 11)</dd>
+</dl>
+
+<h2>References, by what they settle</h2>
+
+<h3>The foundations</h3>
+<ul class="refs">
+  <li>Spearman, C. (1904). “General intelligence,” objectively determined and measured. <em>American Journal of Psychology</em>, 15, 201–293. — The founding document of the true-score era that IRT later replaced.</li>
+  <li>Thurstone, L. L. (1925). A method of scaling psychological and educational tests. <em>Journal of Educational Psychology</em>, 16, 433–451. — The first recognisably modern item-curve picture.</li>
+  <li>Lord, F. M. (1952). <em>A theory of test scores</em> (Psychometric Monograph No. 7). — The normal-ogive model and the break with classical theory.</li>
+  <li>Rasch, G. (1960). <em>Probabilistic models for some intelligence and attainment tests.</em> Danish Institute for Educational Research. — The Rasch model and specific objectivity.</li>
+  <li>Birnbaum, A. (1968). Some latent trait models and their use in inferring an examinee's ability. In F. M. Lord &amp; M. R. Novick, <em>Statistical theories of mental test scores</em> (chs. 17–20). Addison-Wesley. — The 2PL and 3PL in their modern logistic form, inside the book that codified the field.</li>
+</ul>
+
+<h3>The polytomous models</h3>
+<ul class="refs">
+  <li>Samejima, F. (1969). <em>Estimation of latent ability using a response pattern of graded scores</em> (Psychometrika Monograph No. 17). — The graded response model.</li>
+  <li>Masters, G. N. (1982). A Rasch model for partial credit scoring. <em>Psychometrika</em>, 47, 149–174. — The partial credit model.</li>
+  <li>Muraki, E. (1992). A generalized partial credit model: Application of an EM algorithm. <em>Applied Psychological Measurement</em>, 16, 159–176. — The GPCM, and polytomous estimation by EM.</li>
+</ul>
+
+<h3>Estimation</h3>
+<ul class="refs">
+  <li>Bock, R. D., &amp; Lieberman, M. (1970). Fitting a response model for n dichotomously scored items. <em>Psychometrika</em>, 35, 179–197. — Marginal maximum likelihood stated, before it was practical.</li>
+  <li>Dempster, A. P., Laird, N. M., &amp; Rubin, D. B. (1977). Maximum likelihood from incomplete data via the EM algorithm. <em>Journal of the Royal Statistical Society B</em>, 39, 1–38. — The general EM framework.</li>
+  <li>Bock, R. D., &amp; Aitkin, M. (1981). Marginal maximum likelihood estimation of item parameters: Application of an EM algorithm. <em>Psychometrika</em>, 46, 443–459. — The algorithm this engine implements; the paper that made MML practical.</li>
+  <li>Warm, T. A. (1989). Weighted likelihood estimation of ability in item response theory. <em>Psychometrika</em>, 54, 427–450. — The WLE score and its bias correction.</li>
+</ul>
+
+<h3>Fit and assumptions</h3>
+<ul class="refs">
+  <li>Yen, W. M. (1984). Effects of local item dependence on the fit and equating performance of the three-parameter logistic model. <em>Applied Psychological Measurement</em>, 8, 125–145. — Q3 and the cost of ignoring local dependence.</li>
+  <li>Chen, W.-H., &amp; Thissen, D. (1997). Local dependence indexes for item pairs using item response theory. <em>Journal of Educational and Behavioral Statistics</em>, 22, 265–289. — The LD χ² pairwise diagnostics.</li>
+  <li>Orlando, M., &amp; Thissen, D. (2000). Likelihood-based item-fit indices for dichotomous item response theory models. <em>Applied Psychological Measurement</em>, 24, 50–64. — S-X², the item-fit statistic to trust.</li>
+  <li>Maydeu-Olivares, A., &amp; Joe, H. (2006). Limited information goodness-of-fit testing in multidimensional contingency tables. <em>Psychometrika</em>, 71, 713–732. — M2 and limited-information global fit.</li>
+  <li>Horn, J. L. (1965). A rationale and test for the number of factors in factor analysis. <em>Psychometrika</em>, 30, 179–185. — Parallel analysis.</li>
+  <li>Velicer, W. F. (1976). Determining the number of components from the matrix of partial correlations. <em>Psychometrika</em>, 41, 321–327. — The MAP test.</li>
+  <li>Christensen, K. B., Makransky, G., &amp; Horton, M. (2017). Critical values for Yen's Q3: Identification of local dependence in the Rasch model using residual correlations. <em>Applied Psychological Measurement</em>, 41, 178–194. — Why 0.2 is not a universal critical value, and what to use instead.</li>
+  <li>McDonald, R. P. (1999). <em>Test theory: A unified treatment.</em> Erlbaum. — ω, and the model-based view of reliability.</li>
+</ul>
+
+<h3>Fairness</h3>
+<ul class="refs">
+  <li>Holland, P. W., &amp; Thayer, D. T. (1988). Differential item performance and the Mantel–Haenszel procedure. In H. Wainer &amp; H. I. Braun (Eds.), <em>Test validity</em> (pp. 129–145). Erlbaum. — The MH DIF procedure and the ETS delta metric.</li>
+  <li>Swaminathan, H., &amp; Rogers, H. J. (1990). Detecting differential item functioning using logistic regression procedures. <em>Journal of Educational Measurement</em>, 27, 361–370. — Logistic-regression DIF, uniform and non-uniform.</li>
+  <li>Thissen, D., Steinberg, L., &amp; Wainer, H. (1988). Use of item response theory in the study of group differences in trace lines. In H. Wainer &amp; H. I. Braun (Eds.), <em>Test validity</em> (pp. 147–169). Erlbaum. — IRT likelihood-ratio DIF.</li>
+  <li>Choi, S. W., Gibbons, L. E., &amp; Crane, P. K. (2011). lordif: An R package for detecting differential item functioning using iterative hybrid ordinal logistic regression/item response theory. <em>Journal of Statistical Software</em>, 39(8). — The ΔR² ≥ 0.02 effect-size convention this tool's logistic flag uses.</li>
+  <li>Benjamini, Y., &amp; Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. <em>Journal of the Royal Statistical Society B</em>, 57, 289–300. — The multiple-comparison adjustment applied across items.</li>
+  <li>Holland, P. W., &amp; Wainer, H. (Eds.) (1993). <em>Differential item functioning.</em> Erlbaum. — The standard reference volume, including the bias-versus-impact distinction.</li>
+</ul>
+
+<h3>Model comparison — the evidence behind the dossier</h3>
+<ul class="refs">
+  <li>Whittaker, T. A., Chang, W., &amp; Dodd, B. G. (2012). The performance of IRT model selection methods with mixed-format tests. <em>Applied Psychological Measurement</em>, 36, 159–180. — BIC essentially never selects the 3PL; the directional-bias evidence. (Part 8, reason one.)</li>
+  <li>Brown, C., Templin, J., &amp; Cohen, A. (2015). Comparing the two- and three-parameter logistic models via likelihood ratio tests: A commonly misunderstood problem. <em>Applied Psychological Measurement</em>, 39, 335–348. — The boundary problem that invalidates the 2PL-versus-3PL LRT. (Part 8, reason two.)</li>
+  <li>Kang, T., &amp; Cohen, A. S. (2007). IRT model selection methods for dichotomous items. <em>Applied Psychological Measurement</em>, 31, 331–358. — How the standard criteria behave, and disagree, in practice.</li>
+  <li>Vuong, Q. H. (1989). Likelihood ratio tests for model selection and non-nested hypotheses. <em>Econometrica</em>, 57, 307–333. — What the Vuong test actually assumes, and therefore why it is not implemented here.</li>
+</ul>
+
+<h3>Software and practice</h3>
+<ul class="refs">
+  <li>Chalmers, R. P. (2012). mirt: A multidimensional item response theory package for the R environment. <em>Journal of Statistical Software</em>, 48(6). — The R package this engine is validated against in CI.</li>
+  <li>Cella, D., et al. (2010). The Patient-Reported Outcomes Measurement Information System (PROMIS) developed and tested its first wave of adult self-reported health outcome item banks: 2005–2008. <em>Journal of Clinical Epidemiology</em>, 63, 1179–1194. — IRT rebuilt health measurement. (Part 9.)</li>
+  <li>Embretson, S. E., &amp; Reise, S. P. (2000). <em>Item response theory for psychologists.</em> Erlbaum. — The gentlest serious book-length introduction, if this series has left you wanting one.</li>
+  <li>de Ayala, R. J. (2022). <em>The theory and practice of item response theory</em> (2nd ed.). Guilford. — The practitioner's reference for everything this series compressed.</li>
+</ul>
+
+<div class="box">
+<h4>Where to go from here</h4>
+<p>If you have read all twelve parts, you know what the numbers mean, how they are computed, what can invalidate them, and what the software does with them. The fastest way to make it stick is Part 11's move: simulate data where you know the truth (<code>app/irt/simulate.py</code> will oblige), run it through the tool, and check the report against what you planted. When the two disagree, one of you is wrong — and finding out which is the whole discipline in miniature.</p>
+</div>
+
+<nav class="pager">
+  <a href="11-worked-example.html"><span class="lbl">Previous</span>← Part 11 · A real analysis</a>
+  <span></span>
+</nav>
+
+</div>
+</body>
+</html>

@@ -1,13 +1,9 @@
-# Async workers for IRTBoss
+"""Background execution: the queue seam and the analysis job.
+
+Everything CPU-bound lives behind this package. The API's only contact with it is
+:func:`app.workers.queue.enqueue_analysis`.
 """
-Background task processing for IRT model fitting.
 
-Uses Redis Queue (RQ) for job management.
-"""
+from .queue import QUEUE_NAME, enqueue_analysis, get_queue, set_queue
 
-from .tasks import fit_models_task, FittingTaskResult
-
-__all__ = [
-    "fit_models_task",
-    "FittingTaskResult",
-]
+__all__ = ["QUEUE_NAME", "enqueue_analysis", "get_queue", "set_queue"]

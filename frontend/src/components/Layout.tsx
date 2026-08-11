@@ -1,59 +1,51 @@
-import { ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import clsx from 'clsx'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 
-interface LayoutProps {
-  children: ReactNode
-}
+import { useCurrentUser, useLogout } from '@/api/hooks'
+import { Button } from './ui'
 
-export default function Layout({ children }: LayoutProps) {
+export function Layout() {
+  const { data: user } = useCurrentUser()
+  const logout = useLogout()
   const location = useLocation()
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link to="/" className="flex items-center space-x-2">
-              <span className="text-xl font-bold text-gray-900">IRTBoss</span>
-              <span className="text-sm text-gray-500">IRT Assessment Platform</span>
+    <div className="min-h-screen bg-canvas">
+      <header className="sticky top-0 z-10 border-b border-rule bg-surface/95 backdrop-blur">
+        <div className="mx-auto flex max-w-page items-center justify-between gap-4 px-5 py-3">
+          <div className="flex items-baseline gap-4">
+            <Link to="/projects" className="font-display text-title tracking-tight text-ink">
+              IRTBoss
             </Link>
-            <nav className="flex items-center space-x-4">
-              <Link
-                to="/"
-                className={clsx(
-                  'px-3 py-2 rounded-md text-sm font-medium',
-                  location.pathname === '/'
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
-                )}
-              >
-                Dashboard
-              </Link>
-              <a
-                href="/docs"
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium"
-              >
-                Docs
-              </a>
-            </nav>
+            <p className="hidden max-w-prose text-small text-ink-muted sm:block">
+              Fit the models. Read the dossier. See what could not be computed.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {user != null && (
+              <span className="hidden text-small text-ink-muted sm:inline">{user.email}</span>
+            )}
+            <Button
+              variant="secondary"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+            >
+              Sign out
+            </Button>
           </div>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
+      <main key={location.pathname} className="mx-auto max-w-page px-5 py-6">
+        <Outlet />
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-sm text-gray-500 text-center">
-            IRTBoss - Open Source IRT Assessment Platform
-          </p>
-        </div>
+      <footer className="mx-auto max-w-page px-5 pb-8 pt-4">
+        <p className="max-w-prose text-small text-ink-faint">
+          Every statistic in this product is reported with what it could not
+          establish. A blank is never a result — where a number is missing you
+          will see “not computed” and, wherever the analysis recorded one, the
+          reason.
+        </p>
       </footer>
     </div>
   )

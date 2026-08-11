@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 11 · A real analysis, read line by line</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 11 of 12</p>
+  <h1>A real analysis, read line by line</h1>
+  <ul class="tracks">
+    <li class="track track-user">Analyst</li>
+    <li class="track track-maint">Maintainer</li>
+  </ul>
+  <p class="lede">Everything so far has explained machinery. This part runs it: 400 respondents, 12 right/wrong items, 2PL and Rasch requested, through the exact pipeline the worker executes. Every number below is from the actual output, and for once we get a luxury no real analysis has — we know the true parameters, because the data was generated from them. That lets us see not just what the report says, but whether it is right.</p>
+</header>
+
+<h2>The dataset, and why it is honest</h2>
+
+<p>The responses were drawn by <code>app/irt/simulate.py</code> — the same module that generates the tool's shipped examples and its parameter-recovery tests — from a documented 2PL truth with a recorded seed (20260803). Twelve items with difficulties spaced evenly from −2.0 to +2.0, discriminations drawn between 0.89 and 1.78, abilities drawn from a standard normal, and 3% of responses deleted at random. A grouping variable for the DIF screen splits respondents into groups A and B <em>independently of ability</em> — which means the truth about DIF is that there is none. Remember that; it matters at the end.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Property</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Respondents × items</td><td>400 × 12, all dichotomous</td></tr>
+<tr><td>Missing responses</td><td>3.25%, deleted completely at random</td></tr>
+<tr><td>Generating model</td><td>2PL, difficulties −2.0 … +2.0, discriminations 0.89 … 1.78</td></tr>
+<tr><td>Models requested</td><td>2PL and Rasch</td></tr>
+<tr><td>True DIF</td><td>None — groups assigned independently of θ</td></tr>
+<tr><td>Wall-clock time</td><td>31 seconds for fits, comparison, and every diagnostic</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>The run goes through <code>run_analysis()</code> in <code>backend/app/analysis/orchestrator.py</code> — the one function the worker calls (Part 10). What follows is its output, in the order a report presents it.</p>
+
+<h2>Validation: what the tool did to your data before fitting</h2>
+
+<p>The first section of any report is the record of what validation changed. Here it changed almost nothing: every item's responses were already coded 0/1 so the recoding map is the identity, no items were dropped, no respondents were dropped. One note was attached:</p>
+
+<blockquote>3.2% of responses are missing. They are handled by full-information maximum likelihood: each respondent contributes the items they answered, and nothing is imputed.</blockquote>
+
+<p>That is Part 4's missing-data rule doing its job in production. On a messier file this section is where you would find silently miscoded categories collapsed, all-missing respondents removed, and constant items refused — each with a stated reason.</p>
+
+<h2>The fits: estimates against the truth</h2>
+
+<p>Both models converged. The 2PL reached a log-likelihood of −2263.16 with 24 free parameters; the Rasch reached −2278.56 with 13 (twelve difficulties, plus the latent standard deviation, which the Rasch leaves free — Part 3). Here is the 2PL's difficulty recovery, with the truth it was trying to find:</p>
+
+<figure>
+<svg viewBox="0 0 700 395" role="img" aria-label="Caterpillar plot of the twelve items. For each item, a horizontal line spans the estimated difficulty plus or minus two standard errors, a filled dot marks the estimate, and an open circle marks the true generating difficulty. Every interval contains its truth. Intervals are widest for the easiest and hardest items and narrowest near the centre of the scale.">
+  <line x1="70" y1="340" x2="670" y2="340" stroke="currentColor"/>
+  <g font-size="10" fill="currentColor" text-anchor="middle">
+    <text x="70" y="356">−3</text><text x="170" y="356">−2</text><text x="270" y="356">−1</text>
+    <text x="370" y="356">0</text><text x="470" y="356">1</text><text x="570" y="356">2</text><text x="670" y="356">3</text>
+  </g>
+  <text x="370" y="378" font-size="10" fill="currentColor" text-anchor="middle">difficulty b (θ scale)</text>
+  <g font-size="9.5" fill="currentColor" text-anchor="end">
+    <text x="58" y="37">item 01</text><text x="58" y="63">item 02</text><text x="58" y="89">item 03</text>
+    <text x="58" y="115">item 04</text><text x="58" y="141">item 05</text><text x="58" y="167">item 06</text>
+    <text x="58" y="193">item 07</text><text x="58" y="219">item 08</text><text x="58" y="245">item 09</text>
+    <text x="58" y="271">item 10</text><text x="58" y="297">item 11</text><text x="58" y="323">item 12</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1.4">
+    <line x1="70.3" y1="34" x2="224.3" y2="34"/><line x1="106.2" y1="60" x2="247.4" y2="60"/>
+    <line x1="191.4" y1="86" x2="269.8" y2="86"/><line x1="195.1" y1="112" x2="291.5" y2="112"/>
+    <line x1="263" y1="138" x2="318.2" y2="138"/><line x1="342.4" y1="164" x2="374.4" y2="164"/>
+    <line x1="359.3" y1="190" x2="394.1" y2="190"/><line x1="389.6" y1="216" x2="437.6" y2="216"/>
+    <line x1="423.1" y1="242" x2="493.5" y2="242"/><line x1="435.8" y1="268" x2="495.8" y2="268"/>
+    <line x1="468.4" y1="294" x2="540.4" y2="294"/><line x1="504.8" y1="320" x2="604.4" y2="320"/>
+  </g>
+  <g fill="currentColor">
+    <circle cx="147.3" cy="34" r="3.5"/><circle cx="176.8" cy="60" r="3.5"/><circle cx="230.6" cy="86" r="3.5"/>
+    <circle cx="243.3" cy="112" r="3.5"/><circle cx="290.6" cy="138" r="3.5"/><circle cx="358.4" cy="164" r="3.5"/>
+    <circle cx="376.7" cy="190" r="3.5"/><circle cx="413.6" cy="216" r="3.5"/><circle cx="458.3" cy="242" r="3.5"/>
+    <circle cx="465.8" cy="268" r="3.5"/><circle cx="504.4" cy="294" r="3.5"/><circle cx="554.6" cy="320" r="3.5"/>
+  </g>
+  <g fill="none" stroke="var(--accent)" stroke-width="1.6">
+    <circle cx="170" cy="34" r="4.5"/><circle cx="206.4" cy="60" r="4.5"/><circle cx="242.7" cy="86" r="4.5"/>
+    <circle cx="279.1" cy="112" r="4.5"/><circle cx="315.4" cy="138" r="4.5"/><circle cx="351.8" cy="164" r="4.5"/>
+    <circle cx="388.2" cy="190" r="4.5"/><circle cx="424.6" cy="216" r="4.5"/><circle cx="460.9" cy="242" r="4.5"/>
+    <circle cx="497.3" cy="268" r="4.5"/><circle cx="533.6" cy="294" r="4.5"/><circle cx="570" cy="320" r="4.5"/>
+  </g>
+  <g font-size="10">
+    <circle cx="490" cy="14" r="3.5" fill="currentColor"/>
+    <text x="498" y="18" fill="currentColor">estimate ± 2 SE</text>
+    <circle cx="595" cy="14" r="4.5" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+    <text x="603" y="18" fill="var(--accent)">truth</text>
+  </g>
+</svg>
+<figcaption>2PL difficulty estimates against the generating values. All twelve two-standard-error intervals cover their truth — which is roughly what ±2 SE should deliver, and is the picture the parameter-recovery test suite checks automatically (Part 4). The intervals are visibly widest at the extremes: item 01 (true b = −2.0) is answered correctly by almost everyone, so the data contains little information about exactly how easy it is.</figcaption>
+</figure>
+
+<p>The full table, for the record. Read the SE column against Part 4's warning that an estimate without its standard error is a number pretending to be more than it is:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Item</th><th>True a</th><th>â (SE)</th><th>True b</th><th>b̂ (SE)</th><th>Rasch b̂ (SE)</th></tr></thead>
+<tbody>
+<tr><td>item_01</td><td>1.71</td><td>1.51 (0.42)</td><td>−2.00</td><td>−2.23 (0.39)</td><td>−3.21 (0.22)</td></tr>
+<tr><td>item_02</td><td>1.29</td><td>0.98 (0.22)</td><td>−1.64</td><td>−1.93 (0.35)</td><td>−2.12 (0.17)</td></tr>
+<tr><td>item_03</td><td>1.48</td><td>1.46 (0.29)</td><td>−1.27</td><td>−1.39 (0.20)</td><td>−1.96 (0.17)</td></tr>
+<tr><td>item_04</td><td>0.89</td><td>0.87 (0.17)</td><td>−0.91</td><td>−1.27 (0.24)</td><td>−1.28 (0.15)</td></tr>
+<tr><td>item_05</td><td>1.30</td><td>1.26 (0.22)</td><td>−0.55</td><td>−0.79 (0.14)</td><td>−1.03 (0.15)</td></tr>
+<tr><td>item_06</td><td>1.75</td><td>2.34 (0.38)</td><td>−0.18</td><td>−0.12 (0.08)</td><td>−0.20 (0.14)</td></tr>
+<tr><td>item_07</td><td>1.78</td><td>1.90 (0.29)</td><td>0.18</td><td>0.07 (0.09)</td><td>0.11 (0.14)</td></tr>
+<tr><td>item_08</td><td>1.36</td><td>1.22 (0.19)</td><td>0.55</td><td>0.44 (0.12)</td><td>0.55 (0.14)</td></tr>
+<tr><td>item_09</td><td>1.01</td><td>0.97 (0.17)</td><td>0.91</td><td>0.88 (0.18)</td><td>0.96 (0.15)</td></tr>
+<tr><td>item_10</td><td>1.07</td><td>1.30 (0.21)</td><td>1.27</td><td>0.96 (0.15)</td><td>1.26 (0.15)</td></tr>
+<tr><td>item_11</td><td>1.25</td><td>1.53 (0.29)</td><td>1.64</td><td>1.34 (0.18)</td><td>1.95 (0.17)</td></tr>
+<tr><td>item_12</td><td>1.46</td><td>1.57 (0.32)</td><td>2.00</td><td>1.85 (0.25)</td><td>2.72 (0.20)</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box box-warn">
+<h4>The Rasch column is on a different metric — do not compare it cell by cell</h4>
+<p>The Rasch difficulties look systematically more extreme (−3.21 for item 01 against the 2PL's −2.23). Neither is wrong. The Rasch model fixed every discrimination at 1.0 and let the latent standard deviation float instead; it came back as 1.35, and the difficulties are stretched correspondingly. This is Part 3's arbitrary-scale point made concrete, and it is why <code>latent_sd</code> travels with every fit through the whole pipeline — a diagnostic that assumed SD = 1 for this Rasch fit would be quietly wrong everywhere. The rank order of the items, which is what the Rasch metric preserves, is identical.</p>
+</div>
+
+<h2>The comparison dossier: three criteria, two answers</h2>
+
+<p>This is the section Part 8 prepared you for, and this run happens to be a perfect specimen. The dossier's rankings:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Criterion</th><th>2PL</th><th>Rasch</th><th>First choice</th></tr></thead>
+<tbody>
+<tr><td>Held-out log-likelihood (5-fold)</td><td>−2298.1</td><td>−2299.1</td><td>2PL — by 0.9</td></tr>
+<tr><td>AIC</td><td>4574.3</td><td>4583.1</td><td>2PL</td></tr>
+<tr><td>BIC</td><td>4670.1</td><td>4635.0</td><td><strong>Rasch</strong></td></tr>
+<tr><td>Likelihood-ratio test</td><td colspan="2">χ² = 30.79, df = 11, p = 0.0012</td><td>rejects Rasch</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Taken one at a time, these look like a contradiction: the LRT rejects the Rasch restriction decisively, AIC agrees, BIC prefers the Rasch, and the primary criterion calls the race too close to score. The dossier's verdict, verbatim:</p>
+
+<blockquote>Models indistinguishable: 2PL and Rasch differ by 0.9 in held-out log-likelihood, within the 7.0 standard error of the paired per-fold differences across 5 folds. This comparison does not identify a better model.</blockquote>
+
+<p>To see why the verdict is right, look at the per-fold differences behind that 0.9:</p>
+
+<figure>
+<svg viewBox="0 0 540 175" role="img" aria-label="Bar chart of the difference in held-out log-likelihood, 2PL minus Rasch, for each of five folds. Fold 1: minus 2.4. Fold 2: plus 2.8. Fold 3: plus 1.3. Fold 4: plus 3.1. Fold 5: minus 3.9. The bars straddle the zero line in both directions; their sum is plus 0.9.">
+  <line x1="45" y1="100" x2="520" y2="100" stroke="currentColor"/>
+  <g fill="currentColor" fill-opacity="0.55">
+    <rect x="80" y="100" width="42" height="28.8"/>
+    <rect x="170" y="66.6" width="42" height="33.4"/>
+    <rect x="260" y="84.8" width="42" height="15.2"/>
+    <rect x="350" y="62.7" width="42" height="37.3"/>
+    <rect x="440" y="100" width="42" height="46.3"/>
+  </g>
+  <g font-size="10" fill="currentColor" text-anchor="middle">
+    <text x="101" y="142">−2.4</text>
+    <text x="191" y="62">+2.8</text>
+    <text x="281" y="80">+1.3</text>
+    <text x="371" y="58">+3.1</text>
+    <text x="461" y="160">−3.9</text>
+    <text x="101" y="170">fold 1</text><text x="191" y="170">fold 2</text><text x="281" y="170">fold 3</text><text x="371" y="170">fold 4</text><text x="461" y="170">fold 5</text>
+  </g>
+  <text x="40" y="104" font-size="10" fill="currentColor" text-anchor="end">0</text>
+  <text x="45" y="20" font-size="10" fill="currentColor">held-out log-likelihood, 2PL − Rasch (positive = 2PL predicted better)</text>
+</svg>
+<figcaption>The evidence behind the “indistinguishable” verdict. The 2PL wins three folds, the Rasch wins two, and the fold-to-fold swing (±4) dwarfs the total advantage (+0.9). A single number — “2PL is ahead by 0.9” — would hide exactly the thing this picture shows: the difference is noise-sized.</figcaption>
+</figure>
+
+<p>Now the apparent contradiction dissolves. The LRT's p = 0.0012 is real — the discriminations genuinely are not all equal, and we know that for a fact here, because we generated them between 0.89 and 1.78. But the spread is modest, and with 400 respondents the extra eleven parameters buy essentially nothing in <em>predictive</em> terms: what the 2PL gains in flexibility it gives back in estimation error. In-sample significance and out-of-sample usefulness are different questions, and the dossier reports both without pretending one settles the other. Note also that this LRT is the <em>valid</em> Rasch-versus-2PL one — no parameter sits on a boundary — unlike the 2PL-versus-3PL test Part 8 showed to be broken.</p>
+
+<p>The two BIC-related disagreements are listed in the dossier's disagreement matrix, with the note that no criterion here has a claim to arbitrate the others. The practical instruction is the dossier's own: choose on grounds outside the comparison — interpretability, an existing reporting scale, programme policy. A testing programme that values the Rasch metric's simplicity loses nothing measurable by choosing it here.</p>
+
+<h2>The reference model, and its disclaimer</h2>
+
+<p>Item-level diagnostics have to be computed against <em>some</em> parameterisation, so the orchestrator designates a reference. Its recorded rationale:</p>
+
+<blockquote>2PL leads on held-out predictive log-likelihood, but the leading models are statistically indistinguishable on that criterion. It is used as the reference for item-level diagnostics because one had to be chosen, not because it is better. A different reference could change which items are flagged, and the comparison dossier should be read before treating any of these flags as a property of the items.</blockquote>
+
+<p>That sentence is the design principle from Part 1 — a designation is not a verdict — written into the output where a reader will trip over it.</p>
+
+<h2>Global and item fit: the model describes the data</h2>
+
+<p>For the 2PL: M2 = 75.13 on 54 degrees of freedom, p = 0.030; RMSEA2 = 0.038 with a 90% interval of (0.012, 0.057); SRMSR = 0.052. Read with Part 6's discipline: with n = 400 the p-value has power to notice small things, and the effect sizes say the misfit it noticed is small. The report also tells you M2 used only the 273 respondents with complete data — a bivariate margin is undefined when either item is unanswered — so the test is a little less powerful than the headline n suggests. The Rasch's global fit is measurably worse (M2 = 101.2, df = 65, p = 0.003, RMSEA2 = 0.045), which is the same story the LRT told: the equal-slopes restriction is detectably false, just not predictively costly.</p>
+
+<p>Item fit, computed against the 2PL reference: nothing flagged. All twelve S-X² p-values sit between 0.11 and 0.91, infit runs 0.99–1.02, outfit 0.82–1.02, RMSD 0.024–0.099. This is what fit statistics look like when the fitted model family actually generated the data — worth a long look, because it calibrates what “fine” looks like before you meet real data that isn't.</p>
+
+<h2>Assumptions: checked, not assumed</h2>
+
+<p><strong>Unidimensionality.</strong> Parallel analysis retains exactly one component: the first eigenvalue of the polychoric correlation matrix is 5.21 against a 95th-percentile chance threshold of 1.95, and the second, 1.33, falls below its threshold of 1.58. Velicer's MAP agrees. Correct — the generator had one θ. One instructive wrinkle: the polychoric correlation between item 01 (easiest) and item 12 (hardest) is estimated at 0.94, which is absurd. With b = −2 and b = +2, almost nobody gets the easy item wrong <em>and</em> the hard item right, so the 2×2 table behind that correlation has nearly empty cells and the estimate is unstable. Neither retained component nor any verdict changed because of it, but it is a live example of Part 6's advice to read the matrix, not just the summary.</p>
+
+<p><strong>Local independence.</strong> No pair flagged. The mean off-diagonal Q3 is −0.065 against a structural bias of about −0.091 for a test this short, and the largest Q3* sits below the critical value of 0.230 — which the report derives from 200 parametric bootstrap replications rather than borrowing the conventional 0.2 (Part 6). Correct again: responses were generated independently given θ.</p>
+
+<h2>Scores and reliability</h2>
+
+<p>EAP scores were computed for all 400 respondents — none unscorable. Their mean is 0.00 and their standard deviation 0.87, against true abilities generated with SD ≈ 1.01. That gap is not an error; it is shrinkage. EAP pulls every estimate towards the prior mean in proportion to its uncertainty (Part 5), so the distribution of <em>estimates</em> is always narrower than the distribution of <em>true</em> abilities. A twelve-item test measures with SE around 0.5 across much of the scale, and the shrinkage is the honest reflection of that.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Reliability (2PL)</th><th>Value</th><th>What it answers</th></tr></thead>
+<tbody>
+<tr><td>Marginal (Bayesian)</td><td>0.76</td><td>Variance of true θ explained by EAP scores, prior included</td></tr>
+<tr><td>Marginal (information)</td><td>0.68</td><td>The same idea from the information function, prior excluded</td></tr>
+<tr><td>Empirical</td><td>0.68</td><td>Computed from the actual score distribution of this sample</td></tr>
+<tr><td>McDonald's ω</td><td>0.88</td><td>A sum-score reliability, for comparison with classical reports</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Four numbers, deliberately unreconciled: they answer different questions (Part 5), and a report that averaged them would answer none. For a twelve-item test these are unremarkable values — precision buys length, and there is no length here to spend.</p>
+
+<h2>The DIF screen: three flags, and all of them are false</h2>
+
+<p>Here is the payoff of knowing the truth. The groups were assigned independently of ability, so <em>any</em> flag in this section is a false positive. The screen — run on the 273 complete-case respondents (146 in group A, 127 in B), with the matching-score exclusion explained in its own note — flagged three items:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Item</th><th>Flagged by</th><th>MH (ETS class, raw p)</th><th>Logistic ΔR²</th><th>IRT-LR p</th><th>All BH-adjusted p</th></tr></thead>
+<tbody>
+<tr><td>item_10</td><td>MH + logistic</td><td><strong>B</strong>, p = 0.016</td><td>0.022</td><td>0.080</td><td>≥ 0.20</td></tr>
+<tr><td>item_11</td><td>logistic</td><td>A, p = 0.068</td><td>0.025</td><td>0.026</td><td>≥ 0.31</td></tr>
+<tr><td>item_12</td><td>logistic</td><td>A, p = 0.109</td><td>0.024</td><td>0.085</td><td>≥ 0.34</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Read this the way Part 7's workflow says to, and the flags dissolve on inspection:</p>
+
+<ol class="steps">
+  <li><strong>No item is flagged by all three methods.</strong> Item 10 comes closest with two, and the IRT-LR — the method with the fewest assumptions in play here — declines to join.</li>
+  <li><strong>Every Benjamini–Hochberg adjusted p-value is 0.20 or larger.</strong> Across 12 items and three methods, a couple of raw p-values near 0.02 are what chance manufactures routinely. The adjusted column exists precisely to price that in, and it prices these flags to nothing.</li>
+  <li><strong>The effect sizes hover at their thresholds, not past them.</strong> The logistic flags fire on ΔR² ≥ 0.02; these items sit at 0.022–0.025. Item 10's ETS class B means “slight to moderate”, one step above negligible.</li>
+</ol>
+
+<p>In a real analysis you could not know these are false positives — that certainty is the one thing simulation buys that reality never sells. What you could and should do is exactly what the report's closing note says: a flag is a prompt to read the item's content, not a finding of bias. Here there is no content to read, and the truth is null. Three flags out of 36 method-item tests, all evaporating under adjustment, is the base-rate lesson of Part 7 happening to you in a table.</p>
+
+<h2>What would it take to change the conclusions?</h2>
+
+<p>A report is only understood when you know what would move it. Three concrete counterfactuals for this dataset:</p>
+
+<ul>
+  <li><strong>More people separates the models.</strong> The indistinguishability verdict rests on a ±7 standard error around a +0.9 difference. The per-respondent advantage of the 2PL is real (the slopes really do vary) but tiny; at 4,000 respondents the held-out difference would grow tenfold while its standard error grew by roughly √10, and the dossier would start naming the 2PL cleanly, agreeing with the LRT that already does.</li>
+  <li><strong>More slope variance separates them faster.</strong> Had the discriminations been drawn from 0.5–2.5 instead of 0.89–1.78, the Rasch's equal-slopes restriction would cost real predictive likelihood and every criterion — including BIC — would flip to the 2PL at this sample size.</li>
+  <li><strong>The DIF flags fail every replication.</strong> Rerun with a different seed and different items flirt with the thresholds — that is what false positives do. A real DIF effect (say, a shifted difficulty of 0.5 logits for one group) would instead be flagged by all three methods, survive the BH adjustment, and reproduce across seeds. Consistency across methods and replications, not any single p-value, is what a true signal looks like.</li>
+</ul>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>A complete run — two fits, a comparison, and every diagnostic — took 31 seconds for 400 × 12, and every claim in the report traces to a section of Parts 3–8.</li>
+  <li>All twelve difficulty estimates covered their true values within ±2 SE, with the widest intervals at the extremes of the scale, where correct-answer rates carry the least information.</li>
+  <li>Rasch and 2PL difficulties live on different metrics (latent SD 1.35 versus 1.00); comparing them cell-by-cell is a category error, and <code>latent_sd</code> travels with every fit for exactly this reason.</li>
+  <li>The LRT rejected the Rasch (p = 0.0012) while held-out prediction called the models indistinguishable (+0.9 ± 7.0) — both are correct, because in-sample significance and predictive advantage are different questions.</li>
+  <li>Fit statistics on data the model truly generated look like: S-X² p-values spread over (0.11, 0.91), infit within 0.02 of 1, nothing flagged. Calibrate on this.</li>
+  <li>The DIF screen flagged 3 of 12 items despite a null truth; all three died under Benjamini–Hochberg adjustment and no item was flagged by all three methods. A real effect survives both tests.</li>
+  <li>EAP score SD (0.87) is smaller than true ability SD (1.01) by construction — shrinkage is honesty about a short test, not a bug.</li>
+</ul>
+
+<nav class="pager">
+  <a href="10-software.html"><span class="lbl">Previous</span>← Part 10 · The software</a>
+  <a href="12-glossary-references.html"><span class="lbl">Next</span>Part 12 · Glossary and references →</a>
+</nav>
+
+</div>
+</body>
+</html>

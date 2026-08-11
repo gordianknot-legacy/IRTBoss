@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    # Weekly, Monday 04:00 UTC. The mirt comparison is slow and its result only
+    # changes when the estimator does, so it does not belong on every push.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Tier 1: everything that needs only Python. Runs on every push, and is the
+  # gate for merging. Parameter recovery lives here, so a broken estimator
+  # cannot reach the default branch.
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        # From the lock rather than a hand-listed set: the suite now covers the
+        # API, auth, persistence and queue layers, and a drifting inline list
+        # would silently stop exercising whichever one it forgot. --require-hashes
+        # means CI installs what the image installs, so a green run is evidence
+        # about the artefact and not just about the source. pytest-xdist is in the
+        # lock for this reason — pip refuses an unhashed package alongside it.
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.lock
+
+      - name: Lint
+        # Whole tree: the v1 modules this step used to exclude were removed in
+        # the cutover. Rule set is pinned in backend/pyproject.toml so that a
+        # ruff release cannot fail a build that changed nothing.
+        run: ruff check app tests
+
+      - name: Run tests
+        run: pytest tests -q -n auto
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # `npm run build` runs `tsc -b` first, so this is the type check too.
+      - run: npm run build
+      - run: npm run lint
+      - run: npm run test
+
+  # The same application tests against the database the product deploys on.
+  # Separate from the job above so that a Postgres-only failure is legible as
+  # one: JSONB rather than JSON, native uuid columns and real ON DELETE CASCADE
+  # are all invisible under SQLite, so this is the only place they are covered.
+  postgres:
+    name: Application tests on PostgreSQL
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: irtboss
+          POSTGRES_PASSWORD: irtboss
+          POSTGRES_DB: irtboss_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.lock
+
+      - name: Check the migration applies to an empty database
+        # Alembic, not create_all: the tests build the schema from the models,
+        # so nothing else would notice a migration that drifted from them.
+        env:
+          IRTBOSS_DATABASE_URL: postgresql+asyncpg://irtboss:irtboss@localhost:5432/irtboss_test
+        run: alembic upgrade head && alembic downgrade base
+
+      - name: Run the application tests
+        env:
+          IRTBOSS_TEST_DATABASE_URL: postgresql+asyncpg://irtboss:irtboss@localhost:5432/irtboss_test
+        # Scoped to the suites that touch the database. The psychometrics tests
+        # are pure numerics and would only be re-running the job above.
+        run: >-
+          pytest tests/test_api_*.py tests/test_worker_pipeline.py
+          tests/test_config_and_schema.py tests/test_storage.py -q
+
+  # Tier 2: agreement with an independent implementation of the same models.
+  # Scheduled rather than per-push because installing R and compiling mirt
+  # dominates the runtime.
+  mirt-agreement:
+    name: Agreement with R mirt
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        # From the lock, like the jobs above. An agreement test between two
+        # estimators is worth very little if the numerical stack under one of them
+        # moves between runs.
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.lock
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "release"
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::mirt
+            any::jsonlite
+          working-directory: backend
+
+      - name: Generate the mirt reference fits
+        run: Rscript tests/validation/mirt_reference.R
+
+      - name: Compare against our estimator
+        run: pytest tests/validation -q
+
+      - name: Upload the reference output
+        # Kept whatever the outcome: when this job fails, the reference fits are
+        # the evidence needed to work out which implementation is wrong.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mirt-reference
+          path: backend/tests/validation/fixtures/*.mirt.json
+          if-no-files-found: warn

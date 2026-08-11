@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part 3 · The models: seven ways to turn a response into a probability</title>
+<link rel="stylesheet" href="explainers.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker"><a href="index.html">IRTBoss Explainers</a> · Part 3 of 12</p>
+  <h1>The models: seven ways to turn a response into a probability</h1>
+  <ul class="tracks">
+    <li class="track track-user">Analyst</li>
+    <li class="track track-maint">Maintainer</li>
+  </ul>
+  <p class="lede">Every model IRTBoss fits is one equation for one thing: the probability that a given person gives a given response to a given item. This part builds that equation from arithmetic, then gives all seven families exactly as the code implements them.</p>
+</header>
+
+<h2>Three ideas you need first</h2>
+
+<h3>Odds, and why we take their logarithm</h3>
+
+<p>A probability lives between 0 and 1. That is inconvenient, because ability has no natural upper or lower bound, and we want to add and subtract. So we transform.</p>
+
+<p>Start with <strong>odds</strong>: if the probability of a correct answer is 0.8, the odds are 0.8 / 0.2 = 4, or “four to one on”. Odds run from 0 to infinity — better, but still one-sided. Now take the natural logarithm:</p>
+
+<div class="eq">
+logit(<var>p</var>) <span class="op">=</span> ln( <var>p</var> <span class="op">/</span> (1 <span class="op">−</span> <var>p</var>) )
+</div>
+
+<p>This is the <strong>logit</strong>, or log-odds. It maps (0, 1) onto the whole real line, symmetrically: <var>p</var> = 0.5 gives 0, <var>p</var> = 0.9 gives about +2.2, <var>p</var> = 0.1 gives about −2.2. Logits are the unit everything in IRT is measured in, which is why you will see abilities and difficulties quoted as numbers roughly between −3 and +3.</p>
+
+<p>Going back the other way, the inverse of the logit is the <strong>logistic function</strong>:</p>
+
+<div class="eq">
+logistic(<var>z</var>) <span class="op">=</span> 1 <span class="op">/</span> (1 <span class="op">+</span> <var>e</var><sup>−<var>z</var></sup>)
+</div>
+
+<p>In the code this is <code>_sigmoid</code> in <code>backend/app/irt/families.py</code>, and every probability in every family passes through it.</p>
+
+<h3>The latent trait, and the fact that its scale is arbitrary</h3>
+
+<p><var>θ</var> is the person’s position on whatever the instrument measures. Two things about it surprise people:</p>
+
+<p><strong>It is not observed and never will be.</strong> There is no independent measurement of <var>θ</var> to check against. It is a construct we posit because it explains the pattern of responses economically, and the whole of Part 6 is about testing whether that explanation holds.</p>
+
+<p><strong>Its scale is not determined by the data.</strong> Look at any of the formulae below and notice that you could add 5 to every <var>θ</var> and 5 to every difficulty, and every predicted probability would be unchanged. Or multiply all <var>θ</var> by 2 and halve every slope. The likelihood is identical. So the model is only identified up to a location and a scale, and we must <em>choose</em> one. The standard choice is to declare the population distribution of <var>θ</var> to be normal with mean 0 and standard deviation 1, and that is what IRTBoss does for every family except Rasch — where, as we will see, the choice is made differently and the consequences travel a long way.</p>
+
+<div class="box box-warn">
+<h4>The most common misreading in all of IRT</h4>
+<p>A difficulty of 1.5 does not mean “1.5 units hard” on any absolute scale. It means 1.5 standard deviations above the mean of <em>this population</em>, on <em>this instrument</em>. Comparing raw difficulties across two analyses of different populations without linking them is meaningless. Part 9 covers linking and equating, which is the machinery for making such comparisons legitimately.</p>
+</div>
+
+<h3>What the model does <em>not</em> claim</h3>
+
+<p>The model gives probabilities, not predictions. A person at <var>θ</var> = 0 facing an item at <var>b</var> = 0 has a 50% chance. If they get it wrong, the model is not refuted — it said 50%. This is why judging fit requires the statistics of Part 6 rather than counting how often the model “got it right”.</p>
+
+<h2>The item characteristic curve</h2>
+
+<p>Plot the probability of a correct answer against <var>θ</var>, and you get the <strong>item characteristic curve</strong> (ICC) — the single most useful picture in the field. Everything about an item is visible in the shape of its curve.</p>
+
+<figure>
+<svg viewBox="0 0 720 300" role="img" aria-label="Four item characteristic curves on a theta axis from minus four to four: a reference two-parameter curve, a steeper high-discrimination curve, a shallow curve shifted to the right, and a three-parameter curve whose lower asymptote is a quarter rather than zero.">
+  <!-- frame -->
+  <line x1="60" y1="250" x2="670" y2="250" stroke="currentColor"/>
+  <line x1="60" y1="250" x2="60" y2="35" stroke="currentColor"/>
+
+  <!-- y ticks -->
+  <g font-size="10" fill="currentColor" text-anchor="end">
+    <text x="54" y="254">0</text>
+    <text x="54" y="201">0.25</text>
+    <text x="54" y="149">0.5</text>
+    <text x="54" y="96">0.75</text>
+    <text x="54" y="44">1</text>
+  </g>
+  <g stroke="currentColor" stroke-width="0.5" opacity="0.25">
+    <line x1="60" y1="197.5" x2="670" y2="197.5"/>
+    <line x1="60" y1="145" x2="670" y2="145"/>
+    <line x1="60" y1="92.5" x2="670" y2="92.5"/>
+    <line x1="60" y1="40" x2="670" y2="40"/>
+  </g>
+
+  <!-- x ticks -->
+  <g font-size="10" fill="currentColor" text-anchor="middle">
+    <text x="60" y="268">−4</text>
+    <text x="210" y="268">−2</text>
+    <text x="360" y="268">0</text>
+    <text x="510" y="268">2</text>
+    <text x="660" y="268">4</text>
+  </g>
+  <text x="360" y="290" font-size="12" fill="currentColor" text-anchor="middle">ability θ (logits)</text>
+
+  <!-- curves -->
+  <polyline fill="none" stroke="currentColor" stroke-width="1.8" points="60,246.2 72,245.6 85,244.8 98,243.8 110,242.8 122,241.5 135,240.0 148,238.3 160,236.4 172,234.1 185,231.4 197,228.4 210,225.0 222,221.1 235,216.6 248,211.7 260,206.2 272,200.1 285,193.5 298,186.4 310,178.8 322,170.7 335,162.3 348,153.7 360,145.0 372,136.3 385,127.7 398,119.3 410,111.2 422,103.6 435,96.5 447,89.9 460,83.8 472,78.3 485,73.4 498,68.9 510,65.0 522,61.6 535,58.6 548,55.9 560,53.6 572,51.7 585,50.0 598,48.5 610,47.2 622,46.2 635,45.2 648,44.4 660,43.8"/>
+  <polyline fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 3" points="60,250.0 72,250.0 85,249.9 98,249.9 110,249.9 122,249.8 135,249.7 148,249.6 160,249.4 172,249.1 185,248.8 197,248.2 210,247.5 222,246.3 235,244.8 248,242.5 260,239.4 272,235.0 285,229.1 298,221.1 310,210.6 322,197.6 335,181.9 348,164.0 360,145.0 372,126.0 385,108.1 398,92.4 410,79.4 422,68.9 435,60.9 447,55.0 460,50.6 472,47.5 485,45.2 498,43.7 510,42.5 522,41.8 535,41.2 548,40.9 560,40.6 572,40.4 585,40.3 598,40.2 610,40.1 622,40.1 635,40.1 648,40.0 660,40.0"/>
+  <polyline fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 3" points="60,242.5 72,241.8 85,240.9 98,240.0 110,239.0 122,238.0 135,236.8 148,235.5 160,234.1 172,232.5 185,230.9 197,229.1 210,227.1 222,225.0 235,222.7 248,220.2 260,217.6 272,214.7 285,211.7 298,208.5 310,205.0 322,201.4 335,197.6 348,193.5 360,189.3 372,184.9 385,180.3 398,175.6 410,170.7 422,165.7 435,160.6 447,155.5 460,150.2 472,145.0 485,139.8 498,134.5 510,129.4 522,124.3 535,119.3 548,114.4 560,109.7 572,105.1 585,100.7 598,96.5 610,92.4 622,88.6 635,85.0 648,81.5 660,78.3"/>
+  <polyline fill="none" stroke="var(--accent)" stroke-width="1.8" points="60,194.7 72,194.2 85,193.6 98,192.9 110,192.1 122,191.1 135,190.0 148,188.8 160,187.3 172,185.6 185,183.6 197,181.3 210,178.7 222,175.8 235,172.5 248,168.8 260,164.6 272,160.1 285,155.1 298,149.8 310,144.1 322,138.0 335,131.8 348,125.3 360,118.8 372,112.2 385,105.7 398,99.5 410,93.4 422,87.7 435,82.4 447,77.4 460,72.9 472,68.7 485,65.0 498,61.7 510,58.8 522,56.2 535,53.9 548,51.9 560,50.2 572,48.7 585,47.5 598,46.4 610,45.4 622,44.6 635,43.9 648,43.3 660,42.8"/>
+
+  <!-- b marker -->
+  <line x1="360" y1="145" x2="360" y2="250" stroke="currentColor" stroke-width="0.7" stroke-dasharray="2 2"/>
+  <text x="366" y="242" font-size="10" fill="currentColor">b = 0</text>
+
+  <!-- labels -->
+  <text x="600" y="30" font-size="10" fill="currentColor" text-anchor="end">a = 2.2, b = 0 (steep)</text>
+  <text x="668" y="76" font-size="10" fill="currentColor" text-anchor="end">a = 1, b = 0</text>
+  <text x="668" y="92" font-size="10" fill="currentColor" text-anchor="end">a = 0.6, b = 1.5 (flat, harder)</text>
+  <text x="150" y="190" font-size="10" fill="var(--accent)">3PL: c = 0.25 floor</text>
+</svg>
+<figcaption>The same three parameters in four combinations. Difficulty <var>b</var> slides the curve left and right; discrimination <var>a</var> controls how steeply it rises; the lower asymptote <var>c</var> lifts the whole curve off the floor so that even very low ability retains a guessing-level chance. Note that the steep item is nearly uninformative below θ = −1: it separates people sharply, but only near its own difficulty.</figcaption>
+</figure>
+
+<h2>The dichotomous families</h2>
+
+<p>Four models for right/wrong items, in increasing generality. In each, <var>P<sub>i</sub></var>(<var>θ</var>) is the probability that a person at ability <var>θ</var> answers item <var>i</var> correctly.</p>
+
+<h3>2PL — the reference point</h3>
+
+<p>Start here, because the others are all restrictions or extensions of it:</p>
+
+<div class="eq">
+<var>P<sub>i</sub></var>(<var>θ</var>) <span class="op">=</span> 1 <span class="op">/</span> ( 1 <span class="op">+</span> <var>e</var><sup>−<var>a<sub>i</sub></var>(<var>θ</var> − <var>b<sub>i</sub></var>)</sup> )
+<span class="tag">2PL</span>
+</div>
+
+<p>Two parameters per item:</p>
+
+<ul>
+  <li><strong>Difficulty <var>b<sub>i</sub></var></strong> — the point on the <var>θ</var> scale where the probability is exactly 0.5. Higher means harder. Read it as “the ability level at which this item becomes a coin flip”.</li>
+  <li><strong>Discrimination <var>a<sub>i</sub></var></strong> — proportional to the slope of the curve at that midpoint. High <var>a</var> means the item separates people just below from people just above very sharply. Low <var>a</var> means the item is only weakly related to the trait. Values around 0.5–2.5 are typical; below about 0.4 the item is barely measuring the construct, and above about 3 you should ask whether it is a near-duplicate of another item.</li>
+</ul>
+
+<h3>1PL — one slope for everything</h3>
+
+<div class="eq">
+<var>P<sub>i</sub></var>(<var>θ</var>) <span class="op">=</span> 1 <span class="op">/</span> ( 1 <span class="op">+</span> <var>e</var><sup>−<var>a</var>(<var>θ</var> − <var>b<sub>i</sub></var>)</sup> ),
+<span style="padding-left:1em">one <var>a</var> shared by all items</span>
+<span class="tag">1PL</span>
+</div>
+
+<p>Note the missing subscript on <var>a</var>. A single discrimination is estimated and applied to every item, so the curves are parallel and differ only in position. The population is fixed at <var>θ</var> ~ N(0, 1).</p>
+
+<h3>Rasch — and why it is not the 1PL</h3>
+
+<div class="eq">
+<var>P<sub>i</sub></var>(<var>θ</var>) <span class="op">=</span> 1 <span class="op">/</span> ( 1 <span class="op">+</span> <var>e</var><sup>−(<var>θ</var> − <var>b<sub>i</sub></var>)</sup> ),
+<span style="padding-left:1em"><var>a</var> <span class="op">=</span> 1 fixed, <var>θ</var> ~ N(0, <var>σ</var>²) with <var>σ</var> estimated</span>
+<span class="tag">Rasch</span>
+</div>
+
+<p>Here the slope is not estimated at all — it is <em>fixed</em> at exactly 1 — and the thing that floats instead is the standard deviation of the population distribution. This is a different model from the 1PL, not a re-labelling, and the difference is the subject of a specific defect in this project’s history.</p>
+
+<div class="box box-code">
+<h4>Why the code keeps them apart — <code>backend/app/irt/families.py</code></h4>
+<p>The two families are declared with different slope regimes: <code>RaschFamily.slope_mode = SlopeMode.FIXED</code> and <code>OnePLFamily.slope_mode = SlopeMode.SHARED</code>. The module docstring for <code>RaschFamily</code> states the consequence directly: the two “place items on different metrics, so anything that assumes theta ~ N(0, 1) is wrong for a Rasch fit unless the estimated variance is carried along with it.”</p>
+<p>This is why <a href="../../PROGRESS.md">PROGRESS.md</a> lists “the latent standard deviation travels” as a load-bearing design decision, and why there is a test asserting on the arguments passed downstream. Handing a Rasch fit’s parameters to a reliability or scoring routine that assumes <var>σ</var> = 1 produces output that looks entirely plausible and is on the wrong scale — the most dangerous class of bug in statistical software, because nothing crashes.</p>
+</div>
+
+<h3>3PL — adding guessing</h3>
+
+<div class="eq">
+<var>P<sub>i</sub></var>(<var>θ</var>) <span class="op">=</span> <var>c<sub>i</sub></var> <span class="op">+</span> (1 <span class="op">−</span> <var>c<sub>i</sub></var>) <span class="op">·</span> 1 <span class="op">/</span> ( 1 <span class="op">+</span> <var>e</var><sup>−<var>a<sub>i</sub></var>(<var>θ</var> − <var>b<sub>i</sub></var>)</sup> )
+<span class="tag">3PL</span>
+</div>
+
+<p>The lower asymptote <var>c<sub>i</sub></var> is the probability of a correct answer as ability goes to negative infinity. On a four-option multiple-choice item, blind guessing suggests something near 0.25, though in practice good distractors pull it lower and attractive wrong answers can pull it lower still.</p>
+
+<p>Note what <var>b<sub>i</sub></var> now means: it is no longer the 0.5 point. Setting <var>θ</var> = <var>b<sub>i</sub></var> gives <var>c<sub>i</sub></var> + (1 − <var>c<sub>i</sub></var>)/2, the midpoint between the floor and the ceiling. With <var>c</var> = 0.25 that is 0.625.</p>
+
+<div class="box box-math">
+<h4>The 3PL prior, in full</h4>
+<p>The guessing parameter is weakly identified: with a few hundred respondents the likelihood is often nearly flat in <var>c</var>, because very few respondents sit low enough on the scale to pin the asymptote down. An unpenalised fit wanders or fails.</p>
+<p>IRTBoss places a Beta(5, 17) prior on each <var>c<sub>i</sub></var>, whose log density (up to a constant) is added to the objective:</p>
+<div class="eq eq-left">
+ln <var>p</var>(<var>c</var>) <span class="op">=</span> (<var>α</var> <span class="op">−</span> 1) ln <var>c</var> <span class="op">+</span> (<var>β</var> <span class="op">−</span> 1) ln(1 <span class="op">−</span> <var>c</var>) <span class="op">+</span> const,
+<span style="padding-left:0.8em"><var>α</var> = 5, <var>β</var> = 17</span>
+</div>
+<p>That distribution has mean <var>α</var>/(<var>α</var>+<var>β</var>) = 0.227 and standard deviation about 0.088 — centred near a four-option guessing rate, loose enough to move if the data insist. It is implemented as <code>ThreePLFamily.log_prior</code> and recorded in the fit notes so it reaches the technical appendix of the report rather than living silently in the code.</p>
+</div>
+
+<div class="box box-warn">
+<h4>Before you reach for the 3PL</h4>
+<p>Estimating a third parameter per item is expensive in information. Rules of thumb in the literature put the requirement at roughly a thousand respondents and upward, and this tool’s own documentation records something sharper: M2, the global fit statistic, has modest power against 3PL guessing, because a 2PL absorbs the univariate margins almost exactly. Detecting a real lower asymptote of 0.35 reliably needs something like 25 items and 4,000 respondents. <strong>A non-significant M2 on a 2PL fit is not evidence that guessing is absent.</strong></p>
+</div>
+
+<h2>The polytomous families</h2>
+
+<p>Now suppose responses are ordered categories: 0/1/2 partial credit, or a five-point agreement scale. An item with <var>m</var> categories needs <var>m</var> − 1 boundary or step parameters, because the categories are separated by <var>m</var> − 1 dividing lines.</p>
+
+<h3>GRM — cumulative boundaries</h3>
+
+<p>Samejima’s approach models the probability of scoring <em>at or above</em> each category, then differences them:</p>
+
+<div class="eq eq-left">
+<var>P*<sub>ik</sub></var>(<var>θ</var>) <span class="op">=</span> <var>P</var>(<var>X<sub>i</sub></var> ≥ <var>k</var>) <span class="op">=</span> 1 <span class="op">/</span> (1 <span class="op">+</span> <var>e</var><sup>−<var>a<sub>i</sub></var>(<var>θ</var> − <var>b<sub>ik</sub></var>)</sup>),
+<span style="padding-left:0.6em"><var>k</var> = 1 … <var>m</var>−1</span>
+<br>
+<var>P</var>(<var>X<sub>i</sub></var> = <var>k</var>) <span class="op">=</span> <var>P*<sub>ik</sub></var>(<var>θ</var>) <span class="op">−</span> <var>P*<sub>i,k+1</sub></var>(<var>θ</var>)
+<span class="tag">GRM</span>
+</div>
+
+<p>with the conventions <var>P*<sub>i0</sub></var> = 1 and <var>P*<sub>im</sub></var> = 0, which make the differencing uniform across all categories. One discrimination is shared by all boundaries within the item; each boundary gets its own location <var>b<sub>ik</sub></var>.</p>
+
+<p>Interpretation: <var>b<sub>i2</sub></var> is the ability at which a person has a 50% chance of scoring 2 or more. The boundaries <em>must</em> be strictly increasing, or a difference goes negative and you have a negative probability.</p>
+
+<div class="box box-code">
+<h4>How ordering is guaranteed rather than enforced — <code>GradedResponseFamily._boundaries</code></h4>
+<p>Rather than constraining the optimiser, IRTBoss reparameterises so that ordering cannot be violated. The first boundary is free; each subsequent one is the previous plus an <em>exponentiated</em> increment:</p>
+<div class="eq eq-left">
+<var>b</var><sub>1</sub> <span class="op">=</span> <var>u</var><sub>1</sub>,
+<span style="padding-left:1em"><var>b<sub>k</sub></var> <span class="op">=</span> <var>b</var><sub><var>k</var>−1</sub> <span class="op">+</span> <var>e</var><sup><var>u</var><sub><var>k</var>+1</sub></sup></span>
+</div>
+<p>Since <var>e</var><sup>anything</sup> &gt; 0, the boundaries increase for <em>any</em> real vector the optimiser proposes. This converts a constrained problem into an unconstrained one — the same trick used for slopes (stored as log <var>a</var>) and guessing (stored as logit <var>c</var>). The pattern is worth internalising, because it is the reason the M-step in Part 4 can use an ordinary unbounded optimiser without boundary handling.</p>
+</div>
+
+<h3>PCM and GPCM — adjacent steps</h3>
+
+<p>Masters’ and Muraki’s approach asks a different question: given that you are at category <var>k</var>−1 or <var>k</var>, what is the probability of <var>k</var>? Accumulating those step decisions gives a divide-by-total form:</p>
+
+<div class="eq eq-left">
+<var>ψ</var><sub>0</sub> <span class="op">=</span> 0,
+<span style="padding-left:1em"><var>ψ<sub>k</sub></var> <span class="op">=</span> <span style="font-size:1.25em">∑</span><sub><var>v</var>=1</sub><sup><var>k</var></sup> <var>a<sub>i</sub></var>(<var>θ</var> <span class="op">−</span> <var>s<sub>iv</sub></var>)</span>
+<br>
+<var>P</var>(<var>X<sub>i</sub></var> = <var>k</var>) <span class="op">=</span> <var>e</var><sup><var>ψ<sub>k</sub></var></sup> <span class="op">/</span> <span style="font-size:1.25em">∑</span><sub><var>j</var>=0</sub><sup><var>m</var>−1</sup> <var>e</var><sup><var>ψ<sub>j</sub></var></sup>
+<span class="tag">GPCM</span>
+</div>
+
+<p>The PCM is this with <var>a<sub>i</sub></var> = 1 for every item; the GPCM estimates <var>a<sub>i</sub></var> freely. The <var>s<sub>iv</sub></var> are <strong>step parameters</strong>: <var>s<sub>i2</sub></var> is the point where categories 1 and 2 are equally likely.</p>
+
+<div class="box">
+<h4>Reversed steps are a finding, not an error</h4>
+<p>Unlike GRM boundaries, step parameters need not be ordered, and IRTBoss deliberately does not force them to be. A reversed step — <var>s</var><sub>3</sub> below <var>s</var><sub>2</sub> — means a category is never the single most likely response at any ability level. That usually tells you something real: the category labels are not functioning as an ordered set, respondents are not distinguishing “agree” from “strongly agree”, or a middle category is being used as “don’t know”. Constraining the ordering away would hide exactly the finding you want. The docstring of <code>_PartialCredit</code> states this as an explicit choice.</p>
+</div>
+
+<h2>Item information: where an item actually measures</h2>
+
+<p>An item is informative where its curve is steep, because that is where a small change in ability produces a large change in expected response. Formally, the <strong>Fisher information</strong> contributed by item <var>i</var> at ability <var>θ</var> is</p>
+
+<div class="eq">
+<var>I<sub>i</sub></var>(<var>θ</var>) <span class="op">=</span> <span style="font-size:1.25em">∑</span><sub><var>k</var></sub> [ ∂<var>P<sub>ik</sub></var>/∂<var>θ</var> ]² <span class="op">/</span> <var>P<sub>ik</sub></var>(<var>θ</var>)
+</div>
+
+<p>For the 2PL this collapses to a form worth memorising:</p>
+
+<div class="eq">
+<var>I<sub>i</sub></var>(<var>θ</var>) <span class="op">=</span> <var>a<sub>i</sub></var>² <var>P<sub>i</sub></var>(<var>θ</var>)(1 <span class="op">−</span> <var>P<sub>i</sub></var>(<var>θ</var>))
+<span class="tag">2PL</span>
+</div>
+
+<p>Three readings of that formula: information is maximised where <var>P</var> = 0.5, that is at <var>θ</var> = <var>b<sub>i</sub></var>; it scales with the <em>square</em> of discrimination, so doubling <var>a</var> quadruples peak information; and it falls off quickly away from the difficulty, faster for steeper items. A test of uniformly medium-difficulty items measures the middle superbly and the tails badly, no matter how many items you add.</p>
+
+<div class="box box-code">
+<h4>One implementation, not seven — <code>backend/app/psychometrics/information.py</code></h4>
+<p>The general formula above requires ∂<var>P<sub>ik</sub></var>/∂<var>θ</var> for every family. Rather than hand-deriving seven analytic gradients — seven opportunities for an algebra slip that no test would catch — IRTBoss differentiates each family’s own <code>probabilities</code> function numerically. The result is that adding a new family gets information, scoring and reliability for free, and there is exactly one place where information can be wrong. This is the “one implementation per quantity” rule in <a href="../../PROGRESS.md">PROGRESS.md</a>.</p>
+</div>
+
+<h2>Choosing among the seven</h2>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Response type</th><th>Model</th><th>Parameters per item</th><th>Use when</th></tr></thead>
+<tbody>
+<tr><td>Right / wrong</td><td>Rasch</td><td>1 (<var>b</var>)</td><td>You are building the instrument and want separability; you will revise misfitting items</td></tr>
+<tr><td>Right / wrong</td><td>1PL</td><td>1 (<var>b</var>), plus one shared <var>a</var></td><td>You want equal discriminations but a fixed population metric</td></tr>
+<tr><td>Right / wrong</td><td>2PL</td><td>2 (<var>a</var>, <var>b</var>)</td><td>The default for describing an existing test; items plainly differ in quality</td></tr>
+<tr><td>Right / wrong</td><td>3PL</td><td>3 (<var>a</var>, <var>b</var>, <var>c</var>)</td><td>Multiple choice with real guessing <em>and</em> a large sample</td></tr>
+<tr><td>Ordered categories</td><td>GRM</td><td><var>m</var> (<var>a</var> + <var>m</var>−1 boundaries)</td><td>Categories are cumulative thresholds on an underlying continuum</td></tr>
+<tr><td>Ordered categories</td><td>PCM</td><td><var>m</var>−1 steps</td><td>Partial credit within a Rasch framework</td></tr>
+<tr><td>Ordered categories</td><td>GPCM</td><td><var>m</var> (<var>a</var> + <var>m</var>−1 steps)</td><td>Ordered categories where items differ in discrimination — the usual case in health and psychology</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>The honest advice is to fit more than one and read Part 8 before choosing. IRTBoss is built for that: you request a set of models, it fits each, and it reports how they compare without picking for you.</p>
+
+<h2>The unified parameter vector</h2>
+
+<p>One implementation detail matters enough to state here, because the whole of Part 4 depends on it. Internally, every family stores its parameters in a single <em>unconstrained</em> real vector <var>u</var>, whose first element is always the log slope:</p>
+
+<pre><code>2PL          u = [log a, b]
+3PL          u = [log a, b, logit c]
+Rasch / 1PL  u = [log a, b]        (element 0 fixed, or tied across items)
+GRM          u = [log a, b1, log d2, ..., log d_(m-1)]
+GPCM / PCM   u = [log a, s1, ..., s_(m-1)]</code></pre>
+
+<p>Slopes stay positive because they are stored as logarithms. Guessing stays in (0, 1) because it is stored as a logit. Graded boundaries stay ordered because they are stored as increments. The optimiser therefore never sees a constraint, and the estimator does not need to know which family it is working with — it asks the family for probabilities and gets a vector back.</p>
+
+<p>The price is that the standard errors come out on the unconstrained scale and must be transformed back. That transformation is the delta method, and it is derived in Part 4.</p>
+
+<h2>What you now know</h2>
+
+<ul>
+  <li>Logits are the unit; the logistic function is the inverse transform; both appear in every family.</li>
+  <li><var>θ</var>’s location and scale are not identified by data and must be chosen — mean 0 and SD 1 for every family here except Rasch, which fixes the slope and estimates the SD instead.</li>
+  <li>Difficulty slides the curve, discrimination steepens it, the lower asymptote lifts it off zero.</li>
+  <li>GRM differences cumulative boundaries; PCM and GPCM accumulate adjacent step logits. Reversed steps are diagnostic information, not a numerical problem.</li>
+  <li>Information peaks at an item’s difficulty and scales with the square of its discrimination.</li>
+  <li>Everything is stored unconstrained, which is what makes the estimator in the next part uniform across all seven families.</li>
+</ul>
+
+<nav class="pager">
+  <a href="02-history.html"><span class="lbl">Previous</span>← Part 2 · A history of IRT</a>
+  <a href="04-estimation.html"><span class="lbl">Next</span>Part 4 · How the numbers are found →</a>
+</nav>
+
+</div>
+</body>
+</html>

@@ -1,92 +1,68 @@
-"""
-FastAPI application entry point for IRTBoss.
+"""ASGI application factory.
 
-This is the main application file that configures and runs the API server.
+Two things this file does not do, both of them v1 defects (P5):
+
+* It does not set ``allow_origins=["*"]``. The allowlist comes from settings and
+  a wildcard is rejected there, because the wildcard was paired with
+  ``allow_credentials=True`` — a combination browsers refuse and which would
+  have been wide open if they did not.
+* It does not create tables. Schema comes from Alembic.
+
+Unhandled exceptions are converted to a generic 500 body. v1 returned raw
+exception strings to clients, which leaks paths, driver internals and query
+fragments to anyone able to provoke an error.
 """
+
+from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from .api.routes import router as api_router
+from app.api import api_router
+from app.core.config import Settings, get_settings
+from app.db.database import dispose_engine
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Lifespan context manager for startup and shutdown events.
-    """
-    # Startup
-    logger.info("Starting IRTBoss API server...")
-
-    # TODO: Initialize database connection
-    # TODO: Initialize Redis/task queue connection
-
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
-
-    # Shutdown
-    logger.info("Shutting down IRTBoss API server...")
-    # TODO: Close database connections
-    # TODO: Close task queue connections
+    await dispose_engine()
 
 
-# Create FastAPI application
-app = FastAPI(
-    title="IRTBoss",
-    description=(
-        "An opinionated IRT assessment platform. "
-        "Go from raw response data to validated IRT model to interpretable report."
-    ),
-    version="0.1.0",
-    lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
 
-# Configure CORS
-# In production, restrict origins appropriately
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include API routes
-app.include_router(api_router, prefix="/api/v1")
-
-
-@app.get("/")
-async def root():
-    """
-    Root endpoint with API information.
-    """
-    return {
-        "name": "IRTBoss",
-        "version": "0.1.0",
-        "description": "Item Response Theory Assessment Platform",
-        "docs": "/docs",
-        "api": "/api/v1",
-    }
-
-
-# For running with uvicorn directly
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "backend.app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+    app = FastAPI(
+        title="IRTBoss API",
+        version="2.0.0",
+        description="Assessment validation: fit, diagnose, and report on item response models.",
+        lifespan=_lifespan,
     )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allow_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+
+    app.include_router(api_router)
+
+    @app.exception_handler(Exception)
+    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+        # Logged in full server-side, generic to the client.
+        logger.exception("unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+    return app
+
+
+app = create_app()

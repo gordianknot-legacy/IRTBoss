@@ -1,69 +1,130 @@
-# IRTBoss Docker Compose Configuration
-# For local development and testing
-
-version: '3.8'
+# Local full-stack development.
+#
+# This is also the only way to exercise the parts of the system the test suite
+# cannot reach on a developer machine: the tests run against SQLite and
+# fakeredis, so Postgres-specific behaviour (JSONB, native uuid, ON DELETE
+# CASCADE) and a real RQ worker dequeuing a real job are only covered here.
+# Object storage is covered in the tests by moto, in process; the MinIO service
+# below is where the same code path runs over the network.
+#
+# Every backend setting is read with the IRTBOSS_ prefix — see
+# backend/app/core/config.py. v1's compose file set DATABASE_URL and REDIS_URL,
+# which the application never read, so the containers silently used the
+# localhost defaults and could not reach these services at all.
 
 services:
-  # Backend API
-  api:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    ports:
-      - "8000:8000"
+  db:
+    image: postgres:16-alpine
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - LOG_LEVEL=INFO
-    depends_on:
-      - redis
-    volumes:
-      - ../backend/app:/app/app:ro  # For development hot-reload
-      - uploads:/app/uploads
+      POSTGRES_USER: irtboss
+      POSTGRES_PASSWORD: irtboss_dev
+      POSTGRES_DB: irtboss
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U irtboss -d irtboss"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # Redis for task queue
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
+    ports: ["6379:6379"]
+    volumes: ["redis-data:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 10
 
-  # Worker for background tasks
-  worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: rq worker --url redis://redis:6379/0 irtboss
+  # Object storage for uploaded CSVs. Here so that compose exercises the same
+  # code path a deployment uses: the API puts the object and the worker gets it
+  # over HTTP, with no directory shared between them. Console on :9001.
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
     environment:
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - redis
-    volumes:
-      - ../backend/app:/app/app:ro
-      - uploads:/app/uploads
+      MINIO_ROOT_USER: irtboss
+      MINIO_ROOT_PASSWORD: irtboss_dev_secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio-data:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # Frontend (optional, for full-stack development)
-  # frontend:
-  #   build:
-  #     context: ../frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - api
-  #   environment:
-  #     - REACT_APP_API_URL=http://localhost:8000
+  # Creates the bucket and exits. The API refuses to start without a bucket
+  # name, but a name is not a bucket — this is what makes it exist.
+  create-bucket:
+    image: minio/mc:latest
+    entrypoint: >
+      sh -c "mc alias set local http://minio:9000 irtboss irtboss_dev_secret &&
+             mc mb --ignore-existing local/irtboss-uploads"
+    depends_on:
+      minio: { condition: service_healthy }
+
+  # Runs migrations to completion, then exits. The API and worker wait on it,
+  # so neither can come up against a schema that does not match the code.
+  migrate:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    command: alembic upgrade head
+    environment: &backend-env
+      IRTBOSS_ENVIRONMENT: development
+      IRTBOSS_DATABASE_URL: postgresql+asyncpg://irtboss:irtboss_dev@db:5432/irtboss
+      IRTBOSS_REDIS_URL: redis://redis:6379/0
+      IRTBOSS_SECRET_KEY: local-development-secret-not-for-deployment
+      IRTBOSS_CORS_ALLOW_ORIGINS: http://localhost:5173
+      IRTBOSS_STORAGE_BACKEND: s3
+      IRTBOSS_S3_BUCKET: irtboss-uploads
+      IRTBOSS_S3_ENDPOINT_URL: http://minio:9000
+      IRTBOSS_S3_REGION: us-east-1
+      # Unprefixed on purpose: botocore reads these, this application does not.
+      AWS_ACCESS_KEY_ID: irtboss
+      AWS_SECRET_ACCESS_KEY: irtboss_dev_secret
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    ports: ["8000:8000"]
+    environment: *backend-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      create-bucket: { condition: service_completed_successfully }
+
+  worker:
+    build: { context: .., dockerfile: docker/Dockerfile }
+    command: python -m app.workers.main
+    environment: *backend-env
+    # No shared volume with the API any more. The worker reads the CSV out of
+    # the bucket by the reference stored on the dataset row, which is what makes
+    # the two independently schedulable; see docs/v2/DEPLOYMENT.md.
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      create-bucket: { condition: service_completed_successfully }
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports: ["5173:5173"]
+    environment:
+      # Where the dev server's /api proxy sends requests. It must name the api
+      # *service*, because the proxy runs in this container and its own loopback
+      # has nothing on port 8000. This replaces a VITE_API_URL that no line of
+      # frontend code ever read — the client uses a relative /api/v1 and relies
+      # entirely on the proxy, so the browser could not reach the API at all.
+      VITE_PROXY_TARGET: http://api:8000
+    volumes:
+      - ../frontend:/app
+      - frontend-modules:/app/node_modules
+    depends_on: [api]
 
 volumes:
+  postgres-data:
   redis-data:
-  uploads:
+  minio-data:
+  frontend-modules:
