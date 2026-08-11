@@ -1,0 +1,13 @@
+# Line endings for the files whose bytes are load-bearing.
+#
+# `core.autocrlf=true` is a normal Windows setting, and under it a checkout
+# rewrites LF to CRLF in the working tree. That is harmless for source, and not
+# harmless for these: `examples/sample_datasets/MANIFEST.json` records the
+# SHA-256 of each example CSV and `backend/tests/test_sample_datasets.py` checks
+# them, so a checkout that rewrote the line endings would fail those checks on
+# Windows and pass on Linux, for a reason having nothing to do with the data.
+#
+# `eol=lf` pins the working-tree form to what the generator writes and what the
+# digests were taken over, on every platform.
+examples/sample_datasets/*.csv text eol=lf
+examples/sample_datasets/MANIFEST.json text eol=lf

@@ -10,11 +10,20 @@ export function SampleSection({
   sample: SampleSummary
   validation: ValidationSummary
 }) {
-  const recodedItems = Object.entries(validation.recoding)
-  const nonConsecutive = recodedItems.filter(([, mapping]) => {
+  // Two kinds of renumbering, reported separately because they say different
+  // things. A 1-5 rating scale was only shifted to 0-based codes: every category
+  // survives. A code set with a gap has lost a category nobody chose. Showing
+  // both under one "unused categories were removed" heading would tell most
+  // users their scale was altered when it was not.
+  const shifted: [string, Record<string, number>][] = []
+  const collapsed: [string, Record<string, number>][] = []
+  for (const [itemId, mapping] of Object.entries(validation.recoding)) {
     const codes = Object.keys(mapping).map(Number)
-    return codes.some((c, i) => c !== i)
-  })
+    const first = codes[0]
+    if (first === undefined || codes.every((code, index) => code === index)) continue
+    const consecutive = codes.every((code, index) => code === first + index)
+    ;(consecutive ? shifted : collapsed).push([itemId, mapping])
+  }
 
   return (
     <div className="space-y-5">
@@ -76,16 +85,30 @@ export function SampleSection({
         </div>
       )}
 
-      {nonConsecutive.length > 0 && (
-        <Callout tone="attention" title={`${nonConsecutive.length} item(s) were renumbered`}>
-          Their response codes were not consecutive, so unused middle categories were
-          removed rather than estimated:{' '}
-          {nonConsecutive.slice(0, 6).map(([itemId, mapping]) => (
+      {shifted.length > 0 && (
+        <Callout tone="neutral" title={`${shifted.length} item(s) were shifted to 0-based codes`}>
+          Their response codes did not start at zero. Every category was kept and the
+          order of the scale is unchanged:{' '}
+          {shifted.slice(0, 6).map(([itemId, mapping]) => (
             <Badge key={itemId} tone="neutral" className="mr-1">
               {itemId}: {Object.keys(mapping).join(',')}
             </Badge>
           ))}
-          {nonConsecutive.length > 6 && <span> and {nonConsecutive.length - 6} more.</span>}
+          {shifted.length > 6 && <span> and {shifted.length - 6} more.</span>}
+        </Callout>
+      )}
+
+      {collapsed.length > 0 && (
+        <Callout tone="attention" title={`${collapsed.length} item(s) lost a category`}>
+          Their response codes had gaps, so categories nobody chose were removed rather
+          than estimated. An unused middle category is not distinguishable from one that
+          does not exist:{' '}
+          {collapsed.slice(0, 6).map(([itemId, mapping]) => (
+            <Badge key={itemId} tone="neutral" className="mr-1">
+              {itemId}: {Object.keys(mapping).join(',')}
+            </Badge>
+          ))}
+          {collapsed.length > 6 && <span> and {collapsed.length - 6} more.</span>}
         </Callout>
       )}
     </div>

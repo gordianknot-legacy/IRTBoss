@@ -166,19 +166,41 @@ def validate(frame: pd.DataFrame) -> ValidatedData:
     if values.shape[0] == 0:
         raise ValueError("no respondent answered any item")
 
-    non_consecutive = {
-        item_id: sorted(mapping)
-        for item_id, mapping in recoding.items()
-        if [int(k) for k in mapping] != list(range(len(mapping)))
-    }
-    if non_consecutive:
-        example = next(iter(non_consecutive))
+    # Two different things get renumbered here and they are not the same claim
+    # about the data. Codes that are consecutive but do not start at zero — the
+    # 1-5 rating scale, overwhelmingly the common case — have only been shifted:
+    # every category the instrument offered is still there. Codes with a gap have
+    # had an unobserved category removed. Reporting a removal that did not happen
+    # is the same class of defect as failing to report one that did, so each gets
+    # its own note.
+    shifted: dict[str, list[int]] = {}
+    collapsed: dict[str, list[int]] = {}
+    for item_id, mapping in recoding.items():
+        codes = [int(code) for code in mapping]        # ascending by construction
+        if codes == list(range(len(codes))):
+            continue
+        if codes == list(range(codes[0], codes[0] + len(codes))):
+            shifted[item_id] = codes
+        else:
+            collapsed[item_id] = codes
+
+    if shifted:
+        example = next(iter(shifted))
+        codes = shifted[example]
         notes.append(
-            f"{len(non_consecutive)} items had non-consecutive response codes "
-            f"(for example {example}: {non_consecutive[example]}) and were "
-            "renumbered to consecutive categories. An unused middle category is "
-            "not distinguishable from one that does not exist, so a category "
-            "nobody chose has been removed rather than estimated."
+            f"{len(shifted)} items used response codes running from {codes[0]} to "
+            f"{codes[-1]} rather than from 0 (for example {example}), and were "
+            "renumbered to 0-based categories. No category was removed and the "
+            "order of the scale is unchanged."
+        )
+    if collapsed:
+        example = next(iter(collapsed))
+        notes.append(
+            f"{len(collapsed)} items had gaps in their response codes (for "
+            f"example {example}: {collapsed[example]}) and were renumbered to "
+            "consecutive categories. An unused middle category is not "
+            "distinguishable from one that does not exist, so a category nobody "
+            "chose has been removed rather than estimated."
         )
 
     missing_rate = float((values == MISSING).mean())

@@ -236,7 +236,8 @@ The governing rule is **never silently repair data**. An item that cannot be mod
 - **Constant items are dropped** — an item where every observed response is the same cannot discriminate.
 - **Columns with more than 12 distinct values are dropped** as probable continuous measures: a raw score, an age, a timestamp. Refusing is safer than fitting a 40-category GRM that will not converge and will take an hour not doing so.
 - **Categories are mapped by value**, numerically where the column is numeric, so a file whose first row happens to read 2, 0, 1 does not end up with an inverted scale.
-- **Non-consecutive codes are renumbered**, with a note. A category nobody chose is not distinguishable from one that does not exist, so it is removed rather than estimated.
+- **Codes that do not start at zero are shifted**, with a note that says no category was removed — the 1–5 rating scale, which is how survey data usually arrives.
+- **Codes with gaps are renumbered**, with a different note. A category nobody chose is not distinguishable from one that does not exist, so it is removed rather than estimated. The two are reported separately because they are different claims about the data, and a note asserting a removal that did not happen is exactly the kind of plausible falsehood the validation record exists to prevent.
 - **Respondents who answered nothing are excluded**, with a count, so that a reported sample size means people who actually responded.
 - **Item, ID and grouping columns are declared, never inferred.** v1 inferred, and would fit a respondent-ID column as an item.
 

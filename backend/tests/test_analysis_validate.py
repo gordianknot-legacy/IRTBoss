@@ -120,7 +120,7 @@ def test_a_respondent_who_answered_nothing_is_dropped_and_counted():
     assert any("answered no items" in n for n in result.notes)
 
 
-def test_non_consecutive_codes_are_renumbered_and_reported():
+def test_codes_with_gaps_are_renumbered_and_the_removal_is_reported():
     """Codes 1/3/5 are three categories, and the gaps are not categories."""
     frame = pd.DataFrame({"i0": [1, 3, 5, 1, 3, 5], "i1": [1, 1, 3, 3, 5, 5]})
 
@@ -129,7 +129,31 @@ def test_non_consecutive_codes_are_renumbered_and_reported():
     assert list(result.data.n_categories) == [3, 3]
     assert result.data.values.max() == 2
     assert result.recoding["i0"] == {"1": 0, "3": 1, "5": 2}
-    assert any("non-consecutive" in n for n in result.notes)
+    assert any("gaps in their response codes" in n for n in result.notes)
+    assert any("has been removed rather than estimated" in n for n in result.notes)
+
+
+def test_a_one_based_scale_is_shifted_without_claiming_a_removal():
+    """The 1-5 rating scale is consecutive; nothing about it was dropped.
+
+    Both cases end in a renumbering, so it is tempting to report them with one
+    note. They are different claims: this one says the codes moved, the test
+    above says a category the instrument offered is gone. A note asserting a
+    removal that did not happen is exactly the kind of plausible-looking
+    falsehood the validation record exists to prevent.
+    """
+    frame = pd.DataFrame(
+        {"q0": [1, 2, 3, 4, 5, 3], "q1": [5, 4, 3, 2, 1, 3]}
+    )
+
+    result = validate(frame)
+
+    assert list(result.data.n_categories) == [5, 5]
+    assert result.data.values.min() == 0
+    assert result.recoding["q0"] == {"1": 0, "2": 1, "3": 2, "4": 3, "5": 4}
+    assert any("running from 1 to 5" in n for n in result.notes)
+    assert any("No category was removed" in n for n in result.notes)
+    assert not any("gaps in their response codes" in n for n in result.notes)
 
 
 def test_recoding_is_reported_for_every_kept_item():

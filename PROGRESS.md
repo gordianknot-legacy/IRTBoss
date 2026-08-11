@@ -76,6 +76,13 @@ The v1 estimation stack — the R subprocess wrapper, its fabrication path, and 
 - Result sections for the sample, the comparison dossier, per-model diagnostics, assumptions, DIF, person scores, reproducibility and diagnostic failures
 - A shared component for rendering absence, with tests
 
+**Example datasets** (`examples/sample_datasets/`, `backend/scripts/generate_sample_datasets.py`)
+- Four datasets generated from written-down parameters with recorded seeds, replacing the v1 files whose generating parameters nobody had kept and a README that documented a file which did not exist
+- Each ships a `<name>.parameters.csv`, and `MANIFEST.json` records seed, shape and SHA-256; `tests/test_sample_datasets.py` checks the digests, so a hand-edited CSV fails the suite rather than outliving its documentation
+- Two of them are instructive about their own limits, with the measured numbers in the README: the 3PL example carries real lower asymptotes that n = 500 cannot recover (estimated c correlates with true c at −0.01, the Beta(5, 17) prior doing the work), and the DIF example has no group impact, which is the best case for Mantel-Haenszel rather than a representative one
+- The DIF example is complete by design. An earlier draft with 8% missing left 140 complete cases of 800 — below the per-group minimum — so the dataset whose purpose was DIF produced no DIF statistics at all. Missing-data handling is demonstrated by the Likert example instead
+- Validation now separates a code set that was merely shifted to 0-based (the 1–5 rating scale) from one that lost a category to a gap. The single note it used to emit claimed a removal that had not happened
+
 **Explainer series** (`docs/explainers/`)
 - Twelve self-contained HTML chapters plus an index, taking a reader from "what is wrong with a total score" to the primary literature: history, the seven models, the Bock–Aitkin derivation, scoring and precision, fit and assumptions, DIF, the comparison dossier, applications, the software architecture, a worked example, and a glossary with references
 - Part 11 narrates an actual run of `run_analysis()` — 400×12, 2PL and Rasch, seed 20260803 — and every number in it is from the real output, including an indistinguishability verdict alongside a significant LRT and three DIF false positives that die under Benjamini–Hochberg, each used as a teaching case
@@ -106,8 +113,8 @@ These are real and none of them are hidden in the code. They belong here rather 
 **Testing**
 - The suite runs against SQLite and `fakeredis` by default. PostgreSQL specifics — JSONB, native `uuid`, `ON DELETE CASCADE`, the CHECK-constraint enums — are now covered by a CI job that points the same application tests at a real PostgreSQL service via `IRTBOSS_TEST_DATABASE_URL`, and that job also applies and reverses the Alembic migration so a migration that drifts from the models is caught. It cannot be run on this machine — there is no PostgreSQL or Docker here — but it has now run on GitHub and passes, migration round-trip included, so this one is observed rather than merely constructed.
 - The queue is still `fakeredis` everywhere. **No real RQ worker has dequeued a real job in an automated test.** Docker Compose is the only place that path runs at all.
-- Tier 2 mirt agreement runs on a schedule, not per push, so a divergence from the reference implementation can survive on a branch for up to a week.
-- **Tier 2 has never actually run.** Two reasons, both now visible rather than inferred: the fixtures it reads were excluded from the repository by a `*.csv` ignore rule until they were committed, and GitHub only fires `schedule` and `workflow_dispatch` from the default branch, where `.github/workflows/ci.yml` does not yet exist. So the agreement with `mirt` is currently a claim about code that has been read, not about a job that has passed. It becomes runnable when this branch reaches `main`, and the first scheduled run is the thing to check afterwards.
+- Tier 2 mirt agreement runs on a schedule and on manual dispatch, not per push, so a divergence from the reference implementation can survive on a branch for up to a week.
+- Tier 2 **has now run**, which it never had before the v2 branch reached `main`: run `31468740005`, dispatched from `main` on 2026-08-11. Twelve comparisons — four fixtures (Rasch 20×1500, 2PL 25×2000, 3PL 30×3000, GRM 12×2000) against three checks each: item parameters, log-likelihood, free-parameter count — all passed, none skipped. The agreement with `mirt` is now a property of a job that has passed rather than of code that has been read. What is still unobserved is agreement on anything outside those four fixtures.
 
 **Product**
 - Consequence analysis (how much θ estimates, standard errors and cut-score classifications change across candidate models) is described in ARCHITECTURE §3.3 and is not implemented.
@@ -116,7 +123,7 @@ These are real and none of them are hidden in the code. They belong here rather 
 - The orchestrator scores respondents with EAP. MAP and WLE exist in the engine and are not selectable through the API.
 - The IRT likelihood-ratio DIF method fits both groups under a single latent population, so it is approximate under substantial group impact. The observed-score methods are the ones to trust there, and the limitation is documented in the module.
 - M2's power against 3PL guessing is modest: the 2PL absorbs the univariate margins almost exactly, so detecting a real lower asymptote needs roughly 25 items and n = 4000 at c = 0.35 before the statistic fires reliably. A non-significant M2 is not evidence against guessing.
-- `examples/sample_datasets/` still contains the v1 files and its README documents a `dichotomous_medium.csv` that does not exist. The datasets have not been regenerated from `app/irt/simulate.py`, so their true parameters are not documented.
+- The example datasets are simulated, so they exercise the platform without validating it. They are now generated from documented parameters with recorded seeds (see below), which makes them checkable but does not make them real response data. Nothing in this repository has been fitted to a real instrument.
 
 ---
 
