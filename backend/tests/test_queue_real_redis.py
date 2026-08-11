@@ -31,7 +31,13 @@ from redis import Redis
 from rq import Queue, Worker
 from sqlalchemy import select
 
-from app.db.models import AnalysisRun, DiagnosticsBlob, ModelFit, RunStatus
+from app.db.models import (
+    AnalysisRun,
+    DiagnosticsBlob,
+    ItemParameterRow,
+    ModelFit,
+    RunStatus,
+)
 from app.irt import ModelKey
 from app.irt.simulate import simulate, spread_parameters
 from app.workers.queue import QUEUE_NAME, set_queue
@@ -151,7 +157,18 @@ async def test_a_real_worker_dequeues_and_completes_a_real_job(
         assert [f.model_key for f in fits] == ["rasch"]
         assert fits[0].converged is True
         assert fits[0].log_likelihood is not None
-        assert fits[0].item_parameters  # the estimator's output survived the trip
+
+        # Queried rather than reached through `fits[0].item_parameters`: that is a
+        # lazy relationship, and touching it on an async session outside a loaded
+        # context raises MissingGreenlet rather than emitting the SELECT.
+        parameters = (
+            await session.execute(
+                select(ItemParameterRow).where(ItemParameterRow.fit_id == fits[0].id)
+            )
+        ).scalars().all()
+        # The estimator's output survived the trip through another process.
+        assert len(parameters) == N_ITEMS
+        assert all(p.se_discrimination is not None for p in parameters)
 
         blob = (
             await session.execute(
