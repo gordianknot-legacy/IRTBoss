@@ -166,7 +166,7 @@ Example datasets are in `examples/sample_datasets/`.
 
 ## Project Status
 
-Early-stage. The estimation engine, the diagnostics suite, persistence, the queue, the API, auth, upload object storage and HTML report rendering exist and are tested. See [`PROGRESS.md`](PROGRESS.md) for what is done, and — more usefully — for the list of known gaps, which includes login rate limiting being in-process, the absence of CSRF tokens, session tokens that survive logout until their TTL expires, no automated test having seen a real RQ worker dequeue a real job, and no test having talked to a real S3 endpoint.
+Early-stage. The estimation engine, the diagnostics suite, persistence, the queue, the API, auth, upload object storage and HTML report rendering exist and are tested. See [`PROGRESS.md`](PROGRESS.md) for what is done, and — more usefully — for the list of known gaps, which includes login rate limiting being in-process, login CSRF being undefended, session revocation being all-or-nothing, no automated test having seen a real RQ worker dequeue a real job, and no test having talked to a real S3 endpoint.
 
 We are especially interested in:
 - research collaborators

@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import api_router
+from app.auth.csrf import CSRF_HEADER_NAME, CSRFMiddleware
 from app.core.config import Settings, get_settings
 from app.db.database import dispose_engine
 
@@ -46,12 +47,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=_lifespan,
     )
 
+    # Order matters, and `add_middleware` inserts at the front of the stack — so
+    # the CORS layer added second is the outer one. That is the arrangement we
+    # want: a CSRF rejection comes back through CORS and therefore carries the
+    # headers a browser needs to read the 403, instead of surfacing in the console
+    # as an opaque network error.
+    app.add_middleware(CSRFMiddleware, settings=settings)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allow_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", CSRF_HEADER_NAME],
     )
 
     app.include_router(api_router)

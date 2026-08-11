@@ -84,6 +84,42 @@ def test_production_refuses_local_upload_storage():
         )
 
 
+def test_the_session_cookie_is_secure_outside_named_development_environments():
+    """`staging` is not production and must still get a Secure cookie.
+
+    The flag used to follow `is_production`, which recognises only `production`
+    and `prod`. `environment` is a free string, so every other name — `staging`,
+    `uat`, `demo`, or a typo — served a session cookie that a browser would
+    happily send over plaintext HTTP. The default is now the other way round:
+    only environments named as local development opt out.
+    """
+
+    assert not Settings(environment="development").session_cookie_is_secure
+    assert not Settings(environment="test").session_cookie_is_secure
+
+    assert Settings(environment="staging").session_cookie_is_secure
+    assert Settings(environment="uat").session_cookie_is_secure
+    assert Settings(environment="prodction").session_cookie_is_secure  # typo
+    assert Settings(
+        environment="production",
+        secret_key="a-real-deployment-secret-value",
+        **_PRODUCTION_STORAGE,
+    ).session_cookie_is_secure
+
+
+def test_the_secure_flag_can_be_forced_but_not_off_in_production():
+    forced_off = Settings(environment="staging", session_cookie_secure=False)
+    assert not forced_off.session_cookie_is_secure
+
+    with pytest.raises(ValueError, match="SESSION_COOKIE_SECURE"):
+        Settings(
+            environment="production",
+            secret_key="a-real-deployment-secret-value",
+            session_cookie_secure=False,
+            **_PRODUCTION_STORAGE,
+        )
+
+
 def test_s3_storage_requires_a_bucket():
     with pytest.raises(ValueError, match="S3_BUCKET"):
         Settings(storage_backend="s3")

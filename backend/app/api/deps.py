@@ -17,7 +17,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.tokens import TokenError, fingerprint_matches, read_token
+from app.auth.tokens import TokenError, fingerprint_matches, is_revoked, read_token
 from app.core.config import Settings, get_settings
 from app.db.database import get_db
 from app.db.models import User
@@ -62,9 +62,15 @@ async def current_user(
         raise _UNAUTHENTICATED from None
 
     user = await UserRepository(session).get(token.user_id)
-    # A deactivated account and a stale password fingerprint both fail here, so
-    # a session cannot outlive either a password change or a disabled user.
-    if user is None or not user.is_active or not fingerprint_matches(token, user.password_hash):
+    # A deactivated account, a stale password fingerprint and an explicit session
+    # revocation all fail here, so a session cannot outlive a password change, a
+    # disabled user, or a "log out everywhere".
+    if (
+        user is None
+        or not user.is_active
+        or not fingerprint_matches(token, user.password_hash)
+        or is_revoked(token, user.sessions_revoked_at)
+    ):
         raise _UNAUTHENTICATED
     return user
 

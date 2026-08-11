@@ -45,6 +45,9 @@ The v1 estimation stack — the R subprocess wrapper, its fabrication path, and 
 - Alembic migrations from the initial schema; `create_all` is not used outside tests
 - `owner_id` on every owned row; repositories are constructed with the acting user and have no unscoped read path. The worker's unscoped access lives in a separately named class so its use is visible in a diff. Another user's row returns 404 with a body identical to a nonexistent id.
 - Argon2id passwords, signed timed session tokens carrying a fingerprint of the password hash, so a password change invalidates every prior session
+- Double-submit CSRF token required on state-changing requests that authenticate by cookie; bearer callers are exempt, since `Authorization` is not CORS-safelisted and a forged cross-origin request carrying it needs a preflight that passes the origin allowlist
+- `POST /auth/revoke-sessions` invalidates every token signed before it, by comparing each token's signature timestamp against one column on the account. Revocation without a session table, and without making a password change the only lever
+- The session cookie is `Secure` unless the environment is explicitly named as local development. Following `is_production` instead meant `staging`, `uat` and every typo served it over plaintext
 - Streamed uploads under a byte cap, with row and column caps applied on shape; parsing, hashing and the disk write all off the event loop
 - Item, ID and grouping columns declared by the caller, never inferred
 - Analyses: the run row is committed as QUEUED before the job reaches Redis, so a dead queue leaves a visible stuck run and a 503 rather than a client holding an id for a row that was never written. There is a test asserting the enqueue happens — the specific thing v1 lacked.
@@ -97,10 +100,9 @@ These are real and none of them are hidden in the code. They belong here rather 
 
 **Security**
 - Login rate limiting is in-process, so the effective limit across N API workers is N times the configured one, and a restart clears it. A Redis-backed limiter is written but deliberately not wired, so that login does not depend on Redis being reachable.
-- No CSRF token. This is safe only while the session cookie stays `SameSite=Lax` and no GET request mutates state.
-- Logout clears the cookie, but a bearer token remains valid for its 12-hour TTL. The only revocation is a password change.
-- The cookie's `secure` flag follows `is_production`, so a staging deployment left at `environment=development` would send it in plaintext.
-- Registration returns 409 on a duplicate address, which discloses that the address is registered. Login does not.
+- Login CSRF is not defended. State-changing requests that authenticate by cookie must now echo a token (`app/auth/csrf.py`), but a request arriving with no session cookie is exempt, because there is no session to hijack — so a victim can still be forced into the attacker's account. `/auth/logout` is exempt too: being unable to end a session is worse than a forged logout.
+- Session revocation is all-or-nothing. `POST /auth/revoke-sessions` invalidates every token signed before it, which covers the lost laptop, but one timestamp per account cannot end one device's session and keep another's. Plain logout stays local to the browser that calls it, and a bearer token it holds survives for the rest of its 12-hour TTL.
+- Registration still returns 409 on a duplicate address, and cannot stop doing so without an email channel: the enumeration-safe answer is "check your inbox", which needs an inbox. It is now throttled, so the endpoint cannot be swept against a list; a single address can still be probed.
 
 **Deployment**
 - No test has talked to a real S3 endpoint. The store is covered by `moto` in process, and Compose runs the same code against MinIO over the network; neither reproduces credential resolution against a real provider, bucket policy, per-object permissions or eventual consistency.

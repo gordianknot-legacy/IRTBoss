@@ -118,6 +118,14 @@ class User(Base):
     # serialised into a response schema.
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Set when the account revokes its sessions. Every token signed before this
+    # instant is rejected on read, which is how "log out everywhere" works with no
+    # server-side session table: one timestamp per account instead of one row per
+    # session. The cost is that it is all-or-nothing — there is no way to end one
+    # device's session and keep another's.
+    sessions_revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = _created_at()
 
     projects: Mapped[list[Project]] = relationship(

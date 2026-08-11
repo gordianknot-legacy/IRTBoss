@@ -21,13 +21,21 @@ npm run test     # vitest run
 
 The dev server proxies `/api` to `http://localhost:8000`, which keeps the browser
 on a single origin. That matters: the session is an **HttpOnly cookie** set by
-`POST /api/v1/auth/{login,register}` (see `_set_session_cookie` in
+`POST /api/v1/auth/{login,register}` (see `_start_session` in
 `backend/app/api/routers/auth.py`), issued with `SameSite=Lax`. Script cannot
 read it, so there is no token to attach by hand — every request in
 `src/api/client.ts` sets `credentials: 'include'` instead. Running against a
 different origin works too (the backend's CORS middleware uses an explicit
 allowlist with `allow_credentials=True`), but the proxy avoids needing
 `SameSite=None`.
+
+The same call sets a second cookie, `irtboss_csrf`, which script **is** meant to
+read: `client.ts` echoes it in an `X-CSRF-Token` header on every non-GET request,
+and the backend rejects a cookie-authenticated mutation that arrives without it
+(`backend/app/auth/csrf.py`). It carries no authority on its own — a session
+cookie is still required — so exposing it to script costs nothing an XSS able to
+read it would not already have. `GET /auth/me` reissues it, which is how a
+browser whose CSRF cookie expired recovers without logging out.
 
 ### Stack
 

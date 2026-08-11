@@ -124,19 +124,36 @@ deliberately not wired, so that login does not fail when Redis is unreachable.
 That trade-off is worth revisiting before this is exposed to the public
 internet; it was chosen for a small deployment.
 
-**There is no CSRF token.** Cookie authentication takes precedence over bearer
-in `app/api/deps.py`. This is safe only while the cookie stays `SameSite=Lax`
-and no `GET` route mutates state. Both hold today; neither is enforced by a
-test.
+**Login CSRF is not defended.** State-changing requests that authenticate by
+cookie must echo the `irtboss_csrf` cookie in an `X-CSRF-Token` header
+(`app/auth/csrf.py`, covered by `tests/test_api_csrf.py`). Requests arriving
+without a session cookie are exempt, because there is no session to hijack — so
+an attacker can still force a victim's browser to log in as *the attacker*, which
+is a real if minor attack, and `/auth/logout` is exempt too because being unable
+to end a session is worse than a forged logout.
 
-**Logout does not revoke bearer tokens.** It clears the cookie. A token already
-issued stays valid for its full TTL (12 hours by default) and the only
-revocation path is a password change. There is no server-side session table, so
-a leaked token cannot be individually invalidated.
+**Session revocation is all-or-nothing.** `POST /auth/revoke-sessions` stamps the
+account and every token signed before that instant stops working, which covers
+the lost-laptop and pasted-token cases without a server-side session table. What
+it cannot do is end one device's session and keep another's — there is one
+timestamp per account, not one row per session. Plain `POST /auth/logout` remains
+local to the browser that calls it, and a bearer token it holds stays valid for
+the rest of its TTL (12 hours by default).
 
 **Registration discloses whether an address is registered**, returning 409 on a
-duplicate. Login is hardened against enumeration; registration is not, and the
-two together still leak.
+duplicate, and this cannot be closed without an email channel: the enumeration-safe
+response is "check your inbox", which needs an inbox to send to. Registration is
+now throttled on the same budget as login, so the endpoint cannot be swept
+against a list of addresses; a patient attacker probing one address at a time is
+still told the truth.
+
+**The session cookie's `Secure` flag follows `is_local_development`, not
+`is_production`.** `environment` is a free string, so a deployment named
+`staging` or `uat` is not production — under the previous rule each of them
+served the session cookie over plaintext HTTP. Only environments explicitly named
+as local development (`development`, `dev`, `local`, `test`, `testing`) opt out.
+`IRTBOSS_SESSION_COOKIE_SECURE` forces the flag either way, and `false` is
+refused in production.
 
 ## Before a first real deployment
 
