@@ -168,7 +168,14 @@ async def test_a_real_worker_dequeues_and_completes_a_real_job(
         ).scalars().all()
         # The estimator's output survived the trip through another process.
         assert len(parameters) == N_ITEMS
-        assert all(p.se_discrimination is not None for p in parameters)
+        assert all(p.se_difficulty is not None for p in parameters)
+        # And its *absences* survived too, which is the more interesting half. A
+        # Rasch fit does not estimate discrimination — it fixes every slope at 1 —
+        # so there is no standard error for one, and a row carrying 0.0 here would
+        # mean the null had been flattened into a number somewhere between the
+        # child process and this query.
+        assert all(p.discrimination == 1.0 for p in parameters)
+        assert all(p.se_discrimination is None for p in parameters)
 
         blob = (
             await session.execute(
