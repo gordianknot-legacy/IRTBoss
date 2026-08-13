@@ -1,6 +1,6 @@
 # IRTBoss Development Progress
 
-State of the `rebuild/v2` branch. This file exists so that a session, a reviewer or a new contributor can tell what is genuinely finished from what merely has a directory. The v1 version of this file reported "PHASE 2 COMPLETE" with a checked box reading "Connected model fitting worker to database" for a connection that did not exist; the list below is written against the code and the commit history rather than against the plan.
+State of `main`. This file exists so that a session, a reviewer or a new contributor can tell what is genuinely finished from what merely has a directory. It described the `rebuild/v2` branch until that branch was merged; if it ever names a branch again, that is a sign it has stopped tracking what is deployed. The v1 version of this file reported "PHASE 2 COMPLETE" with a checked box reading "Connected model fitting worker to database" for a connection that did not exist; the list below is written against the code and the commit history rather than against the plan.
 
 Build order is the one set out in [`docs/v2/ARCHITECTURE.md`](docs/v2/ARCHITECTURE.md) §7: honesty before surface area. Nothing user-facing ships on top of a number that cannot be defended.
 
