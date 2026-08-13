@@ -2,18 +2,44 @@
  * HTTP client.
  *
  * The session is an HttpOnly cookie set by `POST /auth/login` and `/register`
- * (`backend/app/api/routers/auth.py::_set_session_cookie`), so script cannot
- * read it and there is no token to attach by hand. Every request therefore sets
+ * (`backend/app/api/routers/auth.py::_start_session`), so script cannot read it
+ * and there is no token to attach by hand. Every request therefore sets
  * `credentials: 'include'`. The backend's CORS middleware runs with
  * `allow_credentials=True` and an explicit origin allowlist, so this works
  * cross-origin too — but the dev server proxies `/api` to keep the browser on
  * one origin, which avoids the SameSite=Lax cookie being dropped.
  *
+ * The same call sets a second, *readable* cookie holding a CSRF token, and every
+ * state-changing request has to echo it in a header. That is the other half of
+ * `backend/app/auth/csrf.py`: cookies travel on a forged cross-site request, and
+ * a header the attacker cannot read does not. Requests go out without the header
+ * when the cookie is absent — a caller that is not logged in has nothing to
+ * forge, and the backend rejects the case that matters rather than trusting this
+ * file to have got it right.
+ *
  * There is no `axios` here and no interceptor stack: the only cross-cutting
- * concerns are credentials and error shaping, both of which fit in this file.
+ * concerns are credentials, the CSRF echo and error shaping, all of which fit in
+ * this file.
  */
 
 const BASE = '/api/v1'
+
+const CSRF_COOKIE = 'irtboss_csrf'
+const CSRF_HEADER = 'X-CSRF-Token'
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+/** The CSRF token, or null if there is no session. */
+export function csrfToken(): string | null {
+  if (typeof document === 'undefined') return null
+  for (const part of document.cookie.split(';')) {
+    const [name, ...rest] = part.trim().split('=')
+    if (name === CSRF_COOKIE) {
+      const value = rest.join('=')
+      return value ? decodeURIComponent(value) : null
+    }
+  }
+  return null
+}
 
 /**
  * A failed request, with the backend's own message preserved.
@@ -91,9 +117,18 @@ async function handle<T>(response: Response): Promise<T> {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method ?? 'GET').toUpperCase()
+  // A `Headers` instance rather than object spread, so `postForm` keeps its
+  // deliberate absence of Content-Type and the browser still sets the boundary.
+  const headers = new Headers(init.headers)
+  if (!SAFE_METHODS.has(method)) {
+    const token = csrfToken()
+    if (token !== null) headers.set(CSRF_HEADER, token)
+  }
+
   let response: Response
   try {
-    response = await fetch(`${BASE}${path}`, { credentials: 'include', ...init })
+    response = await fetch(`${BASE}${path}`, { credentials: 'include', ...init, headers })
   } catch {
     // A network-level failure is not a 500 and must not be reported as one.
     throw new ApiError(0, 'Could not reach the API. It may be down, or this browser may be offline.')

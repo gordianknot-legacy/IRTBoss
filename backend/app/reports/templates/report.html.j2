@@ -316,6 +316,99 @@
 {% endfor %}
 {% endif %}
 
+{# ----------------------------------------------------- consequence #}
+{% set consequence = ctx.diagnostics.get('consequence') %}
+{% if consequence %}
+<h2>Does the model choice change anything?</h2>
+<p>
+  The comparison above declines to name a winner. This section answers the
+  question that leaves open: whether the candidates would in fact reach different
+  conclusions about these respondents. If they rank and select the same people,
+  the choice between them is a technicality.
+</p>
+<p>
+  Score differences are in <strong>standard deviations of this sample</strong>,
+  after standardising each model's scores — Rasch and PCM leave the latent
+  variance free, so an unstandardised difference would measure the identification
+  convention rather than any disagreement. Correlations and the reclassification
+  counts need no such adjustment.
+</p>
+
+{% if consequence.get('verdict') %}
+<div class="panel"><strong>Verdict:</strong> {{ consequence.get('verdict') }}</div>
+{% endif %}
+
+{% if consequence.get('pairs') %}
+<table>
+  <thead>
+    <tr>
+      <th>Pair</th>
+      <th class="n">r</th>
+      <th class="n">&rho;</th>
+      <th class="n">Mean |&Delta;&theta;|</th>
+      <th class="n">95th |&Delta;&theta;|</th>
+      <th class="n">Max |&Delta;&theta;|</th>
+      <th class="n">Median SE ratio</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for pair in consequence.get('pairs') %}
+    <tr>
+      <td>{{ pair.get('model_a') }} vs {{ pair.get('model_b') }}</td>
+      <td class="n">{{ cell(pair.get('pearson_r') | num(4)) }}</td>
+      <td class="n">{{ cell(pair.get('spearman_rho') | num(4)) }}</td>
+      <td class="n">{{ cell(pair.get('mean_absolute_difference') | num(3)) }}</td>
+      <td class="n">{{ cell(pair.get('p95_absolute_difference') | num(3)) }}</td>
+      <td class="n">{{ cell(pair.get('max_absolute_difference') | num(3)) }}</td>
+      <td class="n">{{ cell(pair.get('se_ratio_median') | num(3)) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h3>Who changes side of a cut</h3>
+<p>
+  At each selection rate, the top proportion of respondents is taken under each
+  model and the two selections compared. The rates are illustrative decision
+  points, not a policy. A tied group straddling the cut is taken whole rather than
+  split, so the two counts can differ; where they do, part of the
+  reclassification is that boundary rather than a disagreement about anyone.
+</p>
+<table>
+  <thead>
+    <tr>
+      <th>Pair</th>
+      <th class="n">Rate</th>
+      <th class="n">Selected (A)</th>
+      <th class="n">Selected (B)</th>
+      <th class="n">Reclassified</th>
+      <th class="n">Proportion</th>
+      <th class="n">&kappa;</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for pair in consequence.get('pairs') %}
+    {% for entry in pair.get('reclassification') or [] %}
+    <tr>
+      <td>{{ pair.get('model_a') }} vs {{ pair.get('model_b') }}</td>
+      <td class="n">{{ cell(entry.get('selection_rate') | percent(0)) }}</td>
+      <td class="n">{{ cell(entry.get('n_selected_a') | integer) }}</td>
+      <td class="n">{{ cell(entry.get('n_selected_b') | integer) }}</td>
+      <td class="n">{{ cell(entry.get('n_reclassified') | integer) }}</td>
+      <td class="n">{{ cell(entry.get('proportion_reclassified') | percent(1)) }}</td>
+      <td class="n">{{ cell(entry.get('kappa') | num(3)) }}</td>
+    </tr>
+    {% endfor %}
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% for note in consequence.get('notes') or [] %}
+<div class="note">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
 {# ------------------------------------------------------ reference model #}
 {% set reference = ctx.diagnostics.get('reference_model') %}
 {% if reference %}
@@ -700,6 +793,8 @@
   <dd>{{ ctx.reproducibility.requested_models | join(', ') or ABSENT }}</dd>
   <dt>Models fitted</dt>
   <dd>{{ ctx.reproducibility.fitted_models | join(', ') or ABSENT }}</dd>
+  <dt>Person scoring requested</dt>
+  <dd>{{ ctx.reproducibility.score_method or ABSENT }}</dd>
   <dt>Started</dt><dd>{{ ctx.reproducibility.started_at | timestamp }}</dd>
   <dt>Finished</dt><dd>{{ ctx.reproducibility.finished_at | timestamp }}</dd>
 </dl>

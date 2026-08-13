@@ -105,7 +105,7 @@ SE(<var>θ̂</var><sub>WLE</sub>) <span class="op">=</span> 1 <span class="op">/
 
 <div class="box box-warn">
 <h4>A current limitation of the tool</h4>
-<p>All three estimators exist in the engine, but the analysis orchestrator scores respondents with <strong>EAP</strong>, and MAP and WLE are not yet selectable through the API. This is recorded in <a href="../../PROGRESS.md">PROGRESS.md</a> under known gaps. If you are reporting individual scores at the extremes, that matters, and it is the kind of thing to check rather than assume.</p>
+<p>All three are selectable per run: <code>score_method</code> on the analysis request, defaulting to <strong>EAP</strong>. Which one was used is recorded on the run and stated in the report’s notes together with what the choice costs, because the choice is not cosmetic — it moves the scores, their standard errors, and the empirical reliability computed from them. If you are reporting individual scores at the extremes, WLE is usually the one you want, and the shrinkage EAP applies there is the reason.</p>
 </div>
 
 <h2>Information: precision is a curve, not a number</h2>
@@ -235,7 +235,7 @@ SE(<var>θ̂</var><sub>WLE</sub>) <span class="op">=</span> 1 <span class="op">/
 <ul>
   <li>Plain ML scores are outward-biased and infinite for perfect scores; EAP, MAP and WLE are three principled repairs.</li>
   <li>EAP and MAP shrink toward the mean — good for group statistics, wrong for individual reporting at the extremes. WLE removes the bias without shrinking, and is the right default for individual feedback.</li>
-  <li>The orchestrator currently uses EAP only; MAP and WLE are not exposed through the API yet.</li>
+  <li>EAP, MAP and WLE are each selectable per run; EAP is the default, and the run records which was used.</li>
   <li>Information is additive over items, peaks at item difficulties, and its reciprocal square root is the conditional standard error.</li>
   <li>Reliability must average the error variance and then divide — averaging information first always overstates, and overstates most for the worst tests.</li>
   <li>Two reliabilities are reported because Bayesian and information-based standard errors match different scoring methods.</li>

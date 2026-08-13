@@ -223,7 +223,7 @@ Conventional adequacy levels — 0.70 for group-level reporting, 0.90 for indivi
 
 All three skip missing responses per cell. A respondent who answered nothing is not scored, rather than being handed the prior mean, which would be a number about the population wearing a person's name. The count of unscorable respondents is part of the score summary.
 
-The analysis pipeline currently scores with EAP and reports a distribution summary. v1 produced no person parameters at all: its ability-estimation function had no call sites.
+The estimator is chosen per run — `score_method` on the analysis request, defaulting to EAP — recorded on the run row, and stated in the report's notes along with what that choice costs. The pipeline reports a distribution summary rather than one row per respondent, because the full θ vector is a per-respondent result and does not belong inlined in every payload. v1 produced no person parameters at all: its ability-estimation function had no call sites.
 
 ---
 
@@ -236,7 +236,8 @@ The governing rule is **never silently repair data**. An item that cannot be mod
 - **Constant items are dropped** — an item where every observed response is the same cannot discriminate.
 - **Columns with more than 12 distinct values are dropped** as probable continuous measures: a raw score, an age, a timestamp. Refusing is safer than fitting a 40-category GRM that will not converge and will take an hour not doing so.
 - **Categories are mapped by value**, numerically where the column is numeric, so a file whose first row happens to read 2, 0, 1 does not end up with an inverted scale.
-- **Non-consecutive codes are renumbered**, with a note. A category nobody chose is not distinguishable from one that does not exist, so it is removed rather than estimated.
+- **Codes that do not start at zero are shifted**, with a note that says no category was removed — the 1–5 rating scale, which is how survey data usually arrives.
+- **Codes with gaps are renumbered**, with a different note. A category nobody chose is not distinguishable from one that does not exist, so it is removed rather than estimated. The two are reported separately because they are different claims about the data, and a note asserting a removal that did not happen is exactly the kind of plausible falsehood the validation record exists to prevent.
 - **Respondents who answered nothing are excluded**, with a count, so that a reported sample size means people who actually responded.
 - **Item, ID and grouping columns are declared, never inferred.** v1 inferred, and would fit a respondent-ID column as an item.
 
@@ -274,7 +275,7 @@ The report is rendered from the persisted run alone. Nothing is recomputed at re
 | The Vuong test | Held-out prediction answers the same question with one fewer approximation |
 | Multidimensional IRT | Requires domain expertise to specify dimensions; misspecification risk is high |
 | Computerised adaptive testing | Different product: item bank management and real-time scoring |
-| Consequence analysis across models | Described in ARCHITECTURE §3.3; not built yet |
+| Consequence analysis across models | Built: `psychometrics/consequence.py`. Per pair of models — score correlation and rank agreement, differences in sample-SD units after standardising each model's metric, a median SE ratio, and reclassification at illustrative selection rates with Cohen's κ. Verdict thresholds are stated as conventions, with the computed numbers beside them |
 
 ---
 

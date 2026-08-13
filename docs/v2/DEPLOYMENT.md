@@ -67,14 +67,23 @@ so a worker configured for one backend that meets a reference from the other
 refuses by name instead of guessing. Bare paths from before this existed are
 still readable on the local backend. See `backend/app/storage/base.py`.
 
-### One configuration trap worth stating plainly
+### The environment name, and what it decides
 
-The session cookie's `secure` flag follows `is_production`, which is derived
-from `IRTBOSS_ENVIRONMENT`. A staging deploy left at the default
-`development` will therefore serve session cookies over plaintext while
-otherwise appearing to work. Set `IRTBOSS_ENVIRONMENT=production` on every
-deployed environment, including staging, and use the environment's own hostname
-to tell them apart rather than this flag.
+`IRTBOSS_ENVIRONMENT` is a free string, and two different questions are asked of
+it. `is_production` — which gates the placeholder-secret and local-storage
+refusals — recognises only `production` and `prod`. The session cookie's `Secure`
+flag does *not* use that: it is on unless the environment is explicitly one of
+`development`, `dev`, `local`, `test` or `testing`.
+
+The asymmetry is deliberate, and it used to be a trap. When the flag followed
+`is_production`, a deployment named `staging` or `uat` — or misspelled — served
+session cookies over plaintext while otherwise appearing to work. Now an
+unrecognised name fails safe. `IRTBOSS_SESSION_COOKIE_SECURE` forces the flag
+either way, and `false` in production is refused at start-up.
+
+Still set `IRTBOSS_ENVIRONMENT=production` on every deployed environment,
+including staging, so the other production checks apply too, and tell
+environments apart by hostname rather than by this variable.
 
 ## Local development
 
@@ -100,9 +109,17 @@ IRTBOSS_TEST_DATABASE_URL=postgresql+asyncpg://irtboss:irtboss@localhost:5432/ir
   pytest tests/test_api_*.py tests/test_worker_pipeline.py -q
 ```
 
-The queue is the gap that remains. Every test uses `fakeredis`, so **no
-automated test has ever seen a real RQ worker dequeue a real job.** Compose is
-the only place that happens, which is why it is worth running before a deploy.
+The queue is covered the same way, by the `queue` job: a Redis service, the
+forking `rq.Worker` that `app/workers/main.py` runs, and an unmocked analysis, so
+the dequeue-fork-estimate-persist path is exercised rather than asserted. Locally:
+
+```bash
+IRTBOSS_TEST_REDIS_URL=redis://localhost:6379/0   pytest tests/test_queue_real_redis.py -q
+```
+
+Without that variable the file skips with a stated reason rather than passing
+quietly. What neither CI nor Compose covers is a worker killed mid-job: the run
+stays `RUNNING` and nothing reaps it.
 
 ## Known limitations
 
@@ -124,19 +141,36 @@ deliberately not wired, so that login does not fail when Redis is unreachable.
 That trade-off is worth revisiting before this is exposed to the public
 internet; it was chosen for a small deployment.
 
-**There is no CSRF token.** Cookie authentication takes precedence over bearer
-in `app/api/deps.py`. This is safe only while the cookie stays `SameSite=Lax`
-and no `GET` route mutates state. Both hold today; neither is enforced by a
-test.
+**Login CSRF is not defended.** State-changing requests that authenticate by
+cookie must echo the `irtboss_csrf` cookie in an `X-CSRF-Token` header
+(`app/auth/csrf.py`, covered by `tests/test_api_csrf.py`). Requests arriving
+without a session cookie are exempt, because there is no session to hijack — so
+an attacker can still force a victim's browser to log in as *the attacker*, which
+is a real if minor attack, and `/auth/logout` is exempt too because being unable
+to end a session is worse than a forged logout.
 
-**Logout does not revoke bearer tokens.** It clears the cookie. A token already
-issued stays valid for its full TTL (12 hours by default) and the only
-revocation path is a password change. There is no server-side session table, so
-a leaked token cannot be individually invalidated.
+**Session revocation is all-or-nothing.** `POST /auth/revoke-sessions` stamps the
+account and every token signed before that instant stops working, which covers
+the lost-laptop and pasted-token cases without a server-side session table. What
+it cannot do is end one device's session and keep another's — there is one
+timestamp per account, not one row per session. Plain `POST /auth/logout` remains
+local to the browser that calls it, and a bearer token it holds stays valid for
+the rest of its TTL (12 hours by default).
 
 **Registration discloses whether an address is registered**, returning 409 on a
-duplicate. Login is hardened against enumeration; registration is not, and the
-two together still leak.
+duplicate, and this cannot be closed without an email channel: the enumeration-safe
+response is "check your inbox", which needs an inbox to send to. Registration is
+now throttled on the same budget as login, so the endpoint cannot be swept
+against a list of addresses; a patient attacker probing one address at a time is
+still told the truth.
+
+**The session cookie's `Secure` flag follows `is_local_development`, not
+`is_production`.** `environment` is a free string, so a deployment named
+`staging` or `uat` is not production — under the previous rule each of them
+served the session cookie over plaintext HTTP. Only environments explicitly named
+as local development (`development`, `dev`, `local`, `test`, `testing`) opt out.
+`IRTBOSS_SESSION_COOKIE_SECURE` forces the flag either way, and `false` is
+refused in production.
 
 ## Before a first real deployment
 
@@ -145,9 +179,11 @@ In rough order of how much damage the absence causes:
 1. ~~Object storage for uploads.~~ Built: `backend/app/storage/`, with the `s3`
    backend required in production. What remains is naming a real bucket in
    `fly.toml` and setting the credentials as secrets.
-2. A smoke test that a queued job is actually dequeued and completes against a
-   real Redis. The Postgres half of this gap is now covered in CI; the queue
-   half is not.
+2. ~~A smoke test that a queued job is actually dequeued and completes against a
+   real Redis.~~ Built: `backend/tests/test_queue_real_redis.py`, run by the
+   `queue` CI job against a Redis service, using the same forking `rq.Worker`
+   as `app/workers/main.py`. What remains uncovered is a worker killed mid-job:
+   the run stays `RUNNING` and there is no reaper.
 3. ~~A dependency lockfile.~~ Built: `backend/requirements.lock`, hash-pinned and
    resolved for the image's platform. The image and all three CI jobs install it
    with `--require-hashes`, and `tests/test_lockfile.py` fails when it drifts from

@@ -49,6 +49,13 @@ def _supported_models() -> tuple[str, ...]:
     return tuple(key.value for key in ModelKey)
 
 
+@lru_cache
+def _supported_score_methods() -> tuple[str, ...]:
+    from app.psychometrics import ScoreMethod
+
+    return tuple(method.value for method in ScoreMethod)
+
+
 @router.post(
     "/datasets/{dataset_id}/analyses",
     response_model=AnalysisRunOut,
@@ -75,11 +82,22 @@ async def create_analysis(
             detail=f"Unsupported models {unknown}; supported: {list(supported)}",
         )
 
+    score_method = payload.score_method.strip().lower()
+    if score_method not in _supported_score_methods():
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unsupported score_method {score_method!r}; supported: "
+                f"{list(_supported_score_methods())}"
+            ),
+        )
+
     run = await runs.create(
         dataset_id=dataset.id,
         requested_models=sorted(set(requested)),
         seed=payload.seed,
         engine_version=ENGINE_VERSION,
+        score_method=score_method,
     )
     await session.commit()
 

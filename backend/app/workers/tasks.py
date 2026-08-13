@@ -71,6 +71,7 @@ async def _execute(run_id: uuid.UUID) -> None:
                     run.dataset.column_metadata or {},
                     list(run.requested_models or []),
                     int(run.seed),
+                    str(run.score_method),
                 )
             except Exception as exc:
                 logger.exception("analysis run %s failed", run_id)
@@ -95,6 +96,7 @@ def _analyse(
     column_metadata: dict,
     models: list[str],
     seed: int,
+    score_method: str,
 ) -> tuple[list, dict, list[str]]:
     """Load the stored CSV and run the orchestrator. Runs in a thread.
 
@@ -121,5 +123,7 @@ def _analyse(
     data = frame[item_columns]
     groups = frame[group_columns] if group_columns else None
 
-    result = run_analysis(data, models, groups=groups, seed=seed)
+    result = run_analysis(
+        data, models, groups=groups, seed=seed, score_method=score_method
+    )
     return list(result.fits), dict(result.diagnostics), list(result.notes)

@@ -1,0 +1,63 @@
+{
+  "generated_by": "backend/scripts/generate_sample_datasets.py",
+  "note": "Digests are checked by backend/tests/test_sample_datasets.py. If you edit a CSV by hand, its documented parameters no longer describe it; regenerate instead.",
+  "datasets": [
+    {
+      "filename": "dichotomous_small.csv",
+      "model": "2pl",
+      "n_persons": 200,
+      "n_items": 20,
+      "n_categories": 2,
+      "first_code": 0,
+      "seed": 20260803,
+      "missing_rate": 0.0,
+      "parameters_file": "dichotomous_small.parameters.csv",
+      "sha256": "6d1a3976f0ec5bfe01bd1a0af93409e11460658d1ad4848c296cce0305d886c0"
+    },
+    {
+      "filename": "dichotomous_medium.csv",
+      "model": "3pl",
+      "n_persons": 500,
+      "n_items": 30,
+      "n_categories": 2,
+      "first_code": 0,
+      "seed": 20260804,
+      "missing_rate": 0.0,
+      "parameters_file": "dichotomous_medium.parameters.csv",
+      "sha256": "5bbe6300ff6e1cfb92458defd215935500fc43d1d33a25df6fce639fd58aa5a7"
+    },
+    {
+      "filename": "polytomous_likert.csv",
+      "model": "grm",
+      "n_persons": 300,
+      "n_items": 15,
+      "n_categories": 5,
+      "first_code": 1,
+      "seed": 20260805,
+      "missing_rate": 0.06,
+      "parameters_file": "polytomous_likert.parameters.csv",
+      "sha256": "e0ee433adf1a485e2dbce56bd9c4d9425780cc635ec3afffcf3d8b8d996a802d"
+    },
+    {
+      "filename": "dichotomous_dif.csv",
+      "model": "2pl",
+      "n_persons": 800,
+      "n_items": 20,
+      "n_categories": 2,
+      "first_code": 0,
+      "seed": 20260806,
+      "missing_rate": 0.0,
+      "parameters_file": "dichotomous_dif.parameters.csv",
+      "sha256": "69a1e25c9a44260fd9c5b452ed03dd8258616873241ba95b137dfbdc7d6a915c",
+      "group_column": "group",
+      "id_column": "respondent_id",
+      "dif_items": [
+        "item_05",
+        "item_11",
+        "item_17"
+      ],
+      "dif_shift_logits": 0.8,
+      "focal_seed": 20260807
+    }
+  ]
+}

@@ -107,6 +107,11 @@ class AnalysisCreate(BaseModel):
     # importing the engine.
     models: list[str] = Field(min_length=1, max_length=7)
     seed: int = Field(default=20260803, ge=0, le=2**31 - 1)
+    # Validated against app.psychometrics.ScoreMethod in the route, for the same
+    # reason as the model keys: this module does not import the numerical stack.
+    # EAP by default because it is the estimator that produces a finite score for
+    # every respondent who answered anything.
+    score_method: str = "eap"
 
 
 class AnalysisRunOut(ORMModel):
@@ -114,6 +119,7 @@ class AnalysisRunOut(ORMModel):
     dataset_id: uuid.UUID
     status: RunStatus
     requested_models: list[str]
+    score_method: str
     seed: int
     engine_version: str
     created_at: datetime

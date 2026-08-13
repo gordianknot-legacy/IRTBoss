@@ -34,6 +34,29 @@ const MODEL_BLURB: Record<ModelKey, string> = {
   gpcm: 'Adjacent-category logits with a free slope per item. Polytomous.',
 }
 
+/**
+ * `ScoreMethod` in `backend/app/psychometrics/scoring.py`. The hints say what
+ * each choice costs, because it is not a preference: it moves the scores, their
+ * standard errors and the empirical reliability computed from them.
+ */
+const SCORE_METHODS: { value: string; label: string; hint: string }[] = [
+  {
+    value: 'eap',
+    label: 'EAP — expected a posteriori',
+    hint: 'Posterior mean. Every respondent who answered anything gets a finite score, but estimates are shrunk towards the population mean, most visibly at the extremes.',
+  },
+  {
+    value: 'map',
+    label: 'MAP — maximum a posteriori',
+    hint: 'Posterior mode. Same shrinkage as EAP; differs from it wherever the posterior is skewed, which is most of the range for a respondent who answered few items.',
+  },
+  {
+    value: 'wle',
+    label: 'WLE — weighted likelihood (Warm)',
+    hint: 'Corrects maximum likelihood’s first-order bias without pulling towards the population mean. The choice when individual scores are reported, at the cost of larger standard errors.',
+  },
+]
+
 export function DatasetPage() {
   const { datasetId = '' } = useParams()
   const navigate = useNavigate()
@@ -43,6 +66,7 @@ export function DatasetPage() {
 
   const [selected, setSelected] = useState<ModelKey[]>(['rasch', '2pl'])
   const [seed, setSeed] = useState(DEFAULT_SEED)
+  const [scoreMethod, setScoreMethod] = useState('eap')
 
   /**
    * How many categories the file appears to contain, from the ingest metadata.
@@ -72,7 +96,7 @@ export function DatasetPage() {
   function submit(event: FormEvent) {
     event.preventDefault()
     create.mutate(
-      { models: selected, seed },
+      { models: selected, seed, score_method: scoreMethod },
       { onSuccess: (run) => navigate(`/analyses/${run.id}`) },
     )
   }
@@ -240,14 +264,33 @@ export function DatasetPage() {
                     onChange={(e) => setSeed(Number(e.target.value))}
                   />
                 </Field>
-                <p className="self-end text-small text-ink-muted">
-                  {selected.length === 1 &&
-                    'One model produces no comparison: a single fit says how well it ' +
-                      'describes the data, not whether another would describe it better.'}
-                  {selected.length >= 2 &&
-                    `${selected.length} models will be cross-validated against each other.`}
-                </p>
+                <Field
+                  label="Person scoring"
+                  htmlFor="score-method"
+                  hint={SCORE_METHODS.find((m) => m.value === scoreMethod)?.hint}
+                >
+                  <select
+                    id="score-method"
+                    className={inputClass}
+                    value={scoreMethod}
+                    onChange={(e) => setScoreMethod(e.target.value)}
+                  >
+                    {SCORE_METHODS.map((method) => (
+                      <option key={method.value} value={method.value}>
+                        {method.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
               </div>
+
+              <p className="text-small text-ink-muted">
+                {selected.length === 1 &&
+                  'One model produces no comparison: a single fit says how well it ' +
+                    'describes the data, not whether another would describe it better.'}
+                {selected.length >= 2 &&
+                  `${selected.length} models will be cross-validated against each other.`}
+              </p>
 
               {create.error != null && (
                 <Callout tone="alarm" title="The run was not started">

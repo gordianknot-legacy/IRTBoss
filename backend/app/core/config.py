@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     secret_key: SecretStr = SecretStr(DEV_PLACEHOLDER_SECRET)
     session_ttl_seconds: int = 60 * 60 * 12
     session_cookie_name: str = "irtboss_session"
+    csrf_cookie_name: str = "irtboss_csrf"
+    # `None` means "decide from the environment", and the decision is made by
+    # `session_cookie_is_secure` below rather than by `is_production`. Set this
+    # explicitly only to force it; `False` is refused in production.
+    session_cookie_secure: bool | None = None
     # Login throttling. In-process by default; see app.auth.ratelimit for the
     # multi-worker caveat.
     login_max_attempts: int = 10
@@ -140,9 +145,44 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _reject_insecure_cookie_in_production(self) -> Settings:
+        if self.is_production and self.session_cookie_secure is False:
+            raise ValueError(
+                "IRTBOSS_SESSION_COOKIE_SECURE=false would send the session cookie "
+                "over plaintext HTTP in production"
+            )
+        return self
+
     @property
     def is_production(self) -> bool:
         return self.environment.lower() in {"production", "prod"}
+
+    @property
+    def is_local_development(self) -> bool:
+        """Named environments where plaintext HTTP is expected.
+
+        The complement of this — not ``is_production`` — is what decides whether
+        the session cookie is marked ``Secure``. The distinction matters because
+        ``environment`` is a free string: ``staging``, ``uat`` and ``demo`` are
+        all not-production, and under the previous rule each of them silently
+        served a session cookie that a browser would send over plaintext. An
+        environment name this list does not recognise now fails safe.
+        """
+
+        return self.environment.lower() in {
+            "development",
+            "dev",
+            "local",
+            "test",
+            "testing",
+        }
+
+    @property
+    def session_cookie_is_secure(self) -> bool:
+        if self.session_cookie_secure is not None:
+            return self.session_cookie_secure
+        return not self.is_local_development
 
 
 @lru_cache

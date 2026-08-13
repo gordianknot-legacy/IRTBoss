@@ -118,6 +118,14 @@ class User(Base):
     # serialised into a response schema.
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Set when the account revokes its sessions. Every token signed before this
+    # instant is rejected on read, which is how "log out everywhere" works with no
+    # server-side session table: one timestamp per account instead of one row per
+    # session. The cost is that it is all-or-nothing — there is no way to end one
+    # device's session and keep another's.
+    sessions_revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = _created_at()
 
     projects: Mapped[list[Project]] = relationship(
@@ -264,6 +272,12 @@ class AnalysisRun(Base):
     # ModelKey values, kept as strings so a new family is a code change and not
     # a database migration.
     requested_models: Mapped[list] = mapped_column(JSONType, nullable=False, default=list)
+    # A ScoreMethod value. A plain string for the same reason as the models above,
+    # and because `app.psychometrics` imports numpy: this module must stay
+    # importable by the web process without dragging the numerical stack in.
+    score_method: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="eap", server_default="eap"
+    )
     seed: Mapped[int] = mapped_column(Integer, nullable=False)
     engine_version: Mapped[str] = mapped_column(String(64), nullable=False)
     # RQ job id, for operator forensics only. The API never reads run state from

@@ -6,11 +6,16 @@
  *   1. what could not be computed        (failures — before any statistic)
  *   2. what the analysis decided for you (run notes, validation, reference model)
  *   3. the comparison dossier            (no winner)
- *   4. assumptions                       (are the models applicable at all)
- *   5. per-model diagnostics             (fit, reliability)
- *   6. DIF                               (a screen, framed as one)
- *   7. person scores
- *   8. reproducibility
+ *   4. consequences                      (does the choice change any decision?)
+ *   5. assumptions                       (are the models applicable at all)
+ *   6. per-model diagnostics             (fit, reliability)
+ *   7. DIF                               (a screen, framed as one)
+ *   8. person scores
+ *   9. reproducibility
+ *
+ * Consequences sit immediately after the dossier because they answer what the
+ * dossier's refusal to name a winner costs — which is the first thing a reader
+ * asks and, when the answer is "nothing", the end of the question.
  *
  * Failures come first because a report that leads with statistics and buries
  * "three diagnostics did not run" at the bottom is a report that will be read as
@@ -24,6 +29,7 @@ import { MODEL_LABELS, modelLabel } from '@/api/types'
 import { Callout, Notes, Panel } from '@/components/ui'
 import { AssumptionsSection } from './AssumptionsSection'
 import { ComparisonSection } from './ComparisonSection'
+import { ConsequenceSection } from './ConsequenceSection'
 import { DifSection } from './DifSection'
 import { FailuresSection } from './FailuresSection'
 import { PerModelSection } from './PerModelSection'
@@ -35,6 +41,7 @@ const SECTIONS = [
   { id: 'coverage', label: 'What was not computed' },
   { id: 'sample', label: 'Sample & validation' },
   { id: 'comparison', label: 'Model comparison' },
+  { id: 'consequence', label: 'Consequences' },
   { id: 'assumptions', label: 'Assumptions' },
   { id: 'per-model', label: 'Fit & reliability' },
   { id: 'dif', label: 'Differential item functioning' },
@@ -119,6 +126,8 @@ export function Results({ result }: { result: AnalysisResult }) {
       </Panel>
 
       <ComparisonSection id="comparison" dossier={diagnostics.comparison} fits={fits} />
+
+      <ConsequenceSection id="consequence" consequence={diagnostics.consequence} />
 
       <AssumptionsSection
         id="assumptions"

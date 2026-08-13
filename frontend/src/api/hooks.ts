@@ -171,7 +171,7 @@ export function useRuns(datasetId: string | undefined) {
 export function useCreateAnalysis(datasetId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (body: { models: string[]; seed: number }) =>
+    mutationFn: (body: { models: string[]; seed: number; score_method: string }) =>
       post<AnalysisRun>(`/datasets/${datasetId}/analyses`, body),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.runs(datasetId) }),
   })
